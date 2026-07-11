@@ -321,6 +321,13 @@ export type Database = {
             foreignKeyName: "trader_regions_trader_id_fkey"
             columns: ["trader_id"]
             isOneToOne: false
+            referencedRelation: "trader_directory"
+            referencedColumns: ["trader_id"]
+          },
+          {
+            foreignKeyName: "trader_regions_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
             referencedRelation: "trader_profiles"
             referencedColumns: ["id"]
           },
@@ -352,6 +359,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "trades"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trader_trades_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_directory"
+            referencedColumns: ["trader_id"]
           },
           {
             foreignKeyName: "trader_trades_trader_id_fkey"
@@ -502,9 +516,61 @@ export type Database = {
         }
         Relationships: []
       }
+      trader_directory: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          business_name: string | null
+          created_at: string | null
+          display_name: string | null
+          phone_e164: string | null
+          photo_url: string | null
+          status: string | null
+          trader_id: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trader_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trader_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      search_traders: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_region_id?: number
+          p_trade_id?: number
+        }
+        Returns: {
+          avatar_url: string
+          business_name: string
+          created_at: string
+          display_name: string
+          friend_vouch_count: number
+          photo_url: string
+          region_names: string[]
+          status: string
+          trade_names: string[]
+          trader_id: string
+          user_id: string
+          vouch_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

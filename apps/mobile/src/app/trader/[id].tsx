@@ -1,20 +1,28 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { trackEvent } from '@/lib/analytics';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { TRADER_PROFILE_SELECT, regionsSummary, tradeChipLabel, type TraderProfileWithJoins } from '@/lib/trader-profile';
 
-type PublicProfile = {
+type DirectoryRow = {
+  trader_id: string;
+  status: string;
+  business_name: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  created_at: string | null;
   display_name: string | null;
   avatar_url: string | null;
-  created_at: string | null;
+  phone_e164: string | null;
 };
 
 type LoadState = 'loading' | 'not_found' | 'ready';
@@ -26,36 +34,33 @@ function formatMemberSince(dateStr: string): string {
 
 export default function PublicTraderProfileScreen() {
   const theme = useTheme();
+  const { session } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [state, setState] = useState<LoadState>(() => (id ? 'loading' : 'not_found'));
-  const [traderProfile, setTraderProfile] = useState<TraderProfileWithJoins | null>(null);
-  const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null);
+  const [directory, setDirectory] = useState<DirectoryRow | null>(null);
+  const [joins, setJoins] = useState<TraderProfileWithJoins | null>(null);
+  const [showReportNote, setShowReportNote] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    supabase
-      .from('trader_profiles')
-      .select(TRADER_PROFILE_SELECT)
-      .eq('id', id)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (cancelled) return;
-        const trader = data as unknown as TraderProfileWithJoins | null;
-        if (!trader) {
-          setState('not_found');
-          return;
-        }
-        setTraderProfile(trader);
-        const { data: pub } = await supabase
-          .from('public_profiles')
-          .select('display_name,avatar_url,created_at')
-          .eq('id', trader.user_id)
-          .single();
-        if (cancelled) return;
-        setPublicProfile(pub ?? null);
-        setState('ready');
-      });
+    Promise.all([
+      supabase
+        .from('trader_directory')
+        .select('trader_id,user_id,status,business_name,bio,photo_url,created_at,display_name,avatar_url,phone_e164')
+        .eq('trader_id', id)
+        .maybeSingle(),
+      supabase.from('trader_profiles').select(TRADER_PROFILE_SELECT).eq('id', id).maybeSingle(),
+    ]).then(([directoryRes, joinsRes]) => {
+      if (cancelled) return;
+      if (!directoryRes.data) {
+        setState('not_found');
+        return;
+      }
+      setDirectory(directoryRes.data as DirectoryRow);
+      setJoins((joinsRes.data as unknown as TraderProfileWithJoins) ?? null);
+      setState('ready');
+    });
     return () => {
       cancelled = true;
     };
@@ -71,7 +76,7 @@ export default function PublicTraderProfileScreen() {
     );
   }
 
-  if (state === 'not_found' || !traderProfile) {
+  if (state === 'not_found' || !directory) {
     return (
       <ThemedView style={styles.container}>
         <ThemedView style={styles.loadingWrap}>
@@ -81,9 +86,22 @@ export default function PublicTraderProfileScreen() {
     );
   }
 
-  const photoUrl = traderProfile.photo_url || publicProfile?.avatar_url || null;
-  const displayName = traderProfile.business_name || publicProfile?.display_name || 'Trader';
-  const isLapsed = traderProfile.status === 'lapsed';
+  const photoUrl = directory.photo_url || directory.avatar_url || null;
+  const displayName = directory.business_name || directory.display_name || 'Trader';
+  const isLapsed = directory.status === 'lapsed';
+  const traderId = directory.trader_id ?? id;
+
+  function handleCall() {
+    if (!directory?.phone_e164) return;
+    void trackEvent(session, 'contact_tapped', { trader_id: traderId, channel: 'call' });
+    void Linking.openURL(`tel:${directory.phone_e164}`);
+  }
+
+  function handleWhatsApp() {
+    if (!directory?.phone_e164) return;
+    void trackEvent(session, 'contact_tapped', { trader_id: traderId, channel: 'whatsapp' });
+    void Linking.openURL(`https://wa.me/${directory.phone_e164.replace('+', '')}`);
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -106,22 +124,22 @@ export default function PublicTraderProfileScreen() {
           )}
           <ThemedView style={styles.headerText}>
             <ThemedText type="subtitle">{displayName}</ThemedText>
-            {publicProfile?.created_at ? (
+            {directory.created_at ? (
               <ThemedText themeColor="textSecondary">
-                Member since {formatMemberSince(publicProfile.created_at)}
+                Member since {formatMemberSince(directory.created_at)}
               </ThemedText>
             ) : null}
           </ThemedView>
         </ThemedView>
 
-        {traderProfile.bio ? <ThemedText>{traderProfile.bio}</ThemedText> : null}
+        {directory.bio ? <ThemedText>{directory.bio}</ThemedText> : null}
 
         <ThemedView style={styles.block}>
           <ThemedText type="smallBold" themeColor="textSecondary">
             Services
           </ThemedText>
           <ThemedView style={styles.chipList}>
-            {traderProfile.trader_trades.map((join) => (
+            {(joins?.trader_trades ?? []).map((join) => (
               <ThemedView
                 key={join.trade_id}
                 style={[styles.chip, { backgroundColor: theme.backgroundElement }]}>
@@ -135,7 +153,7 @@ export default function PublicTraderProfileScreen() {
           <ThemedText type="smallBold" themeColor="textSecondary">
             Where they work
           </ThemedText>
-          <ThemedText>{regionsSummary(traderProfile.trader_regions)}</ThemedText>
+          <ThemedText>{regionsSummary(joins?.trader_regions ?? [])}</ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.block}>
@@ -145,12 +163,34 @@ export default function PublicTraderProfileScreen() {
           <ThemedText themeColor="textSecondary">Vouches arrive in M5</ThemedText>
         </ThemedView>
 
+        {!isLapsed && directory.phone_e164 ? (
+          <ThemedView style={styles.actions}>
+            <Button label="Call" onPress={handleCall} />
+            <Button label="WhatsApp" variant="soft" onPress={handleWhatsApp} />
+          </ThemedView>
+        ) : null}
+
         <ThemedView style={styles.actions}>
-          <Button label="Call" disabled />
-          <Button label="WhatsApp" variant="soft" disabled />
+          <Button label="Vouch for this trader" disabled />
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            Contact arrives with the directory (M3)
+            (arrives in M5)
           </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.reportBlock}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowReportNote((v) => !v)}
+            style={styles.reportRow}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Report this listing
+            </ThemedText>
+          </Pressable>
+          {showReportNote ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              (reporting arrives in M9)
+            </ThemedText>
+          ) : null}
         </ThemedView>
       </ScrollView>
     </ThemedView>
@@ -217,5 +257,12 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
+  },
+  reportBlock: {
+    gap: Spacing.one,
+  },
+  reportRow: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
 });

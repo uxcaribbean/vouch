@@ -38,6 +38,17 @@ export function regionsSummary(joins: TraderRegionJoin[]): string {
 }
 
 /**
+ * Same summary as {@link regionsSummary} but for search_traders' already-
+ * resolved `region_names` (spec M3.3) — the RPC returns the raw region name
+ * ("Trinidad") for the island-wide shortcut, so we still need to relabel it.
+ */
+export function regionNamesSummary(names: string[] | null | undefined): string {
+  if (!names || names.length === 0) return 'No regions set';
+  if (names.includes('Trinidad')) return 'All Trinidad';
+  return names.join(', ');
+}
+
+/**
  * Lightweight existence check for entry points that only need to branch a
  * label/route (home tab, settings) — not the full profile with joins.
  */

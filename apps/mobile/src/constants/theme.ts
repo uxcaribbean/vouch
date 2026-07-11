@@ -62,4 +62,11 @@ export const Spacing = {
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+/**
+ * Web's floating pill tab bar (app-tabs.web.tsx) is an absolutely-positioned
+ * overlay pinned to the top of the screen — unlike NativeTabs on iOS/Android,
+ * it does not reserve its own layout space, so (tabs) screens must pad their
+ * top-anchored content by this on web or it renders (and sits) underneath it.
+ */
+export const WebTopTabBarInset = Platform.select({ web: 80 }) ?? 0;
 export const MaxContentWidth = 800;
