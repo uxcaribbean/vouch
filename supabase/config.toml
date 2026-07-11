@@ -433,3 +433,8 @@ entrypoint = "./functions/complete-profile/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/delete-account/index.ts"
+
+[functions.upsert-trader-profile]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/upsert-trader-profile/index.ts"

@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/button';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { invokeFunction } from '@/lib/supabase';
+import { useTraderProfileId } from '@/lib/trader-profile';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { session, profile, initializing, signOut } = useAuth();
+  const { traderId } = useTraderProfileId();
   const [deleting, setDeleting] = useState(false);
 
   if (!initializing && !session) return <Redirect href="/(tabs)" />;
@@ -60,6 +62,11 @@ export default function SettingsScreen() {
         </ThemedView>
 
         <ThemedView style={styles.block}>
+          <Button
+            label={traderId ? 'My trader listing' : 'I provide a service'}
+            variant="soft"
+            onPress={() => router.push(traderId ? '/my-trader-profile' : '/become-a-trader')}
+          />
           <Button label="Sign out" variant="soft" onPress={handleSignOut} />
           <Button
             label="Delete my account"

@@ -1,6 +1,7 @@
 export * from "./phone.ts";
 export * from "./referral.ts";
 export * from "./schemas.ts";
+export * from "./taxonomy.ts";
 export type {
   Database,
   Tables,

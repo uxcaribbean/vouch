@@ -12,7 +12,8 @@ The authoritative build spec is [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC
 |---|---|
 | M0 Foundations | ✅ built |
 | M1 Auth & identity | ✅ built (server flows verified end-to-end locally) |
-| M2 Trader profiles | next up |
+| M2 Trader profiles | ✅ built (24 server-side acceptance checks) |
+| M3 Directory search & browse | next up |
 
 ## Layout
 

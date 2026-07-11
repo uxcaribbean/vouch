@@ -236,6 +236,132 @@ export type Database = {
           },
         ]
       }
+      trader_profiles: {
+        Row: {
+          bio: string | null
+          business_name: string | null
+          created_at: string
+          free_until: string
+          id: string
+          onboarding_complete: boolean
+          photo_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          visible: boolean | null
+        }
+        Insert: {
+          bio?: string | null
+          business_name?: string | null
+          created_at?: string
+          free_until: string
+          id?: string
+          onboarding_complete?: boolean
+          photo_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          visible?: boolean | null
+        }
+        Update: {
+          bio?: string | null
+          business_name?: string | null
+          created_at?: string
+          free_until?: string
+          id?: string
+          onboarding_complete?: boolean
+          photo_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          visible?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trader_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trader_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trader_regions: {
+        Row: {
+          created_at: string
+          region_id: number
+          trader_id: string
+        }
+        Insert: {
+          created_at?: string
+          region_id: number
+          trader_id: string
+        }
+        Update: {
+          created_at?: string
+          region_id?: number
+          trader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trader_regions_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trader_regions_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trader_trades: {
+        Row: {
+          created_at: string
+          id: string
+          trade_id: number
+          trader_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          trade_id: number
+          trader_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          trade_id?: number
+          trader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trader_trades_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trader_trades_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trades: {
         Row: {
           category: string

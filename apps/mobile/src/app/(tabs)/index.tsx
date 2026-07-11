@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { useTraderProfileId } from '@/lib/trader-profile';
 
 /**
  * Placeholder home. M3 replaces this with the search-first directory
@@ -15,6 +16,7 @@ import { useAuth } from '@/lib/auth';
 export default function HomeScreen() {
   const router = useRouter();
   const { session, profile, initializing } = useAuth();
+  const { traderId } = useTraderProfileId();
 
   return (
     <ThemedView style={styles.container}>
@@ -54,6 +56,11 @@ export default function HomeScreen() {
               label="Settings"
               variant="soft"
               onPress={() => router.push('/settings')}
+            />
+            <Button
+              label={traderId ? 'My trader listing' : 'I provide a service'}
+              variant="soft"
+              onPress={() => router.push(traderId ? '/my-trader-profile' : '/become-a-trader')}
             />
           </ThemedView>
         )}
