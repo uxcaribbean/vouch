@@ -1,0 +1,14 @@
+{
+  "name": "vouch-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.14.2",
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "db:start": "supabase start",
+    "functions:serve": "mkdir -p \"$HOME/.cache/supabase-tmp\" && TMPDIR=\"$HOME/.cache/supabase-tmp\" supabase functions serve",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts"
+  }
+}

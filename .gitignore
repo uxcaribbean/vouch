@@ -1,0 +1,30 @@
+# deps
+node_modules/
+
+# builds
+dist/
+build/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+web-build/
+
+# env & secrets — never commit
+.env
+.env.*
+!.env.example
+
+# supabase local state
+supabase/.temp/
+supabase/.branches/
+
+# os / editor
+.DS_Store
+*.log
+
+# test output
+coverage/
+
+# claude code local session config
+.claude/settings.local.json
