@@ -9,6 +9,7 @@
     "functions:serve": "mkdir -p \"$HOME/.cache/supabase-tmp\" && TMPDIR=\"$HOME/.cache/supabase-tmp\" supabase functions serve",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts"
+    "db:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
+    "verify:acceptance": "bash scripts/acceptance/run-all.sh"
   }
 }

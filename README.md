@@ -6,6 +6,10 @@ own phone contacts: **"Recommended by someone you know."**
 The authoritative build spec is [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC.md).
 `VOUCH` is a codename — never hardcode the brand name in logic.
 
+**Picking this project up fresh?** Read [docs/HANDOVER.md](docs/HANDOVER.md)
+— full project state, decisions log, per-module notes, and first-run steps
+for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
+
 ## Status
 
 | Module | State |
@@ -78,3 +82,4 @@ device, point `EXPO_PUBLIC_SUPABASE_URL` at your machine's LAN IP instead of
 | `pnpm db:start` / `db:stop` / `db:reset` | Local Supabase lifecycle |
 | `pnpm db:types` | Regenerate `packages/shared/src/database.types.ts` after migrations |
 | `pnpm functions:serve` | Edge functions with the Colima TMPDIR fix |
+| `pnpm verify:acceptance` | Clean-DB run of every module's acceptance suite |
