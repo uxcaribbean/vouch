@@ -24,12 +24,28 @@ One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
 as this document describes.
 
-## 2. First run on a new account (same machine)
+## 2. First run for the new account (same computer)
 
-Homebrew formulas (colima, docker, supabase) are machine-wide and already
-installed, **but the Colima VM and all Docker state are per-account** — the
-local database does not carry across accounts and doesn't need to (migrations
-+ seeds rebuild it; all data is disposable dev data).
+Which scenario applies?
+
+**A. Same macOS user, different AI/Claude account login** — the simple case:
+nothing environmental changes. The Colima VM, local database, `.env` files,
+and local AI-session state under `~/.claude` are all keyed to the macOS
+user, not the AI account. Open this folder, start the stack if it isn't
+running (`colima start`, `pnpm db:start`, `pnpm functions:serve`), continue
+from §5. Skip the rest of this section.
+
+**B. Different macOS account on this Mac** — two extra facts:
+
+1. **Folder access:** this repo currently lives inside `/Users/james/`,
+   which other macOS accounts cannot read by default. Either move the whole
+   folder to `/Users/Shared/` (git history travels with it) or grant the
+   new account read/write access. Update absolute paths in your head
+   accordingly — nothing in the repo hardcodes the location.
+2. Homebrew formulas (colima, docker, supabase) are machine-wide and already
+   installed, **but the Colima VM and all Docker state are per-macOS-account**
+   — the local database does not carry across and doesn't need to
+   (migrations + seeds rebuild it; all data is disposable dev data).
 
 ```sh
 colima start --cpu 4 --memory 8      # downloads a VM image on first run
