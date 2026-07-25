@@ -141,13 +141,17 @@ Current demo data after `verify:acceptance`: Keisha Mohammed
   honored), explicit `entrypoint`, `.ts` extensions on relative imports
   (shared package uses them everywhere for Deno compatibility).
 
-**Process (James-approved):**
-- Model routing: pattern-following mobile screens are delegated to Sonnet
-  subagents with a detailed conventions brief (read the existing screens
-  first; verify with typecheck + `expo export` + a browser walkthrough).
-  Schema, RLS, edge functions, and verification stay on the strongest model.
-- Each module: build → server acceptance suite → browser walkthrough →
-  one commit. Local git only; GitHub later.
+**Process (James-approved, reaffirmed 2026-07-25):**
+- Model routing: the strongest model (Fable) is decision-maker and reviewer —
+  it fixes the design, writes the brief AND the module's acceptance suite
+  (independently of the implementer), and reviews every diff. A lower model
+  (Sonnet) executes backend and screens from those briefs. Executors may
+  never edit `scripts/acceptance/`.
+- Each module: design + suite → executor builds until the suite is green →
+  reviewer diff-review + browser walkthrough → one commit → push to GitHub.
+- Environment note: this Mac moved from Colima to Docker Desktop on
+  2026-07-25. Any Docker daemon works; the Colima-specific workarounds
+  (TMPDIR wrapper, analytics off) are harmless under Docker Desktop.
 
 ## 5. The next modules — what to know before starting
 
@@ -183,7 +187,9 @@ one pre-existing lint error in `apps/mobile/src/hooks/use-color-scheme.web.ts`
   creation, Twilio Verify credentials, applying migrations, deploying edge
   functions, real env files (never commit secrets; only the public local
   demo keys are in-repo).
-- **No GitHub remote** — CI workflow is ready and fires on first push.
+- **GitHub remote live (2026-07-25):** https://github.com/uxcaribbean/vouch —
+  CI (typecheck + tests) runs on every push. Process: commit AND push after
+  every module.
 - **No EAS/Expo account wiring** — `eas.json` profiles exist.
 - **Founder items open** (spec §7): final name + domain (blocks M6 links),
   TTD price + payment provider (M10), seed-trader strategy, legal review.

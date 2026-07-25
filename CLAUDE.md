@@ -21,7 +21,9 @@ hardcode the brand in logic.**
 ## Commands
 
 ```sh
-colima start --cpu 4 --memory 8   # per-account VM (first run per account)
+# Any running Docker daemon works (Docker Desktop is active on this Mac);
+# use colima only if none is installed:
+colima start --cpu 4 --memory 8
 pnpm db:start / db:stop / db:reset
 pnpm functions:serve              # wraps the required TMPDIR workaround
 pnpm test && pnpm typecheck       # same as CI
