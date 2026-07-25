@@ -13,6 +13,7 @@ node scripts/acceptance/fixtures-post-m1.mjs
 node scripts/acceptance/test-m2.mjs
 node scripts/acceptance/fixtures-post-m2.mjs
 node scripts/acceptance/test-m3.mjs
+node scripts/acceptance/test-m5.mjs
 
 echo
 echo "All acceptance suites passed."

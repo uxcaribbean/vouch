@@ -34,6 +34,7 @@ export default function MyTraderProfileScreen() {
   const { session, profile: userProfile, initializing } = useAuth();
   const [traderProfile, setTraderProfile] = useState<TraderProfileWithJoins | null>(null);
   const [checked, setChecked] = useState(false);
+  const [vouchCount, setVouchCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -52,6 +53,23 @@ export default function MyTraderProfileScreen() {
       cancelled = true;
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!traderProfile) return;
+    let cancelled = false;
+    supabase
+      .from('vouches')
+      .select('id', { count: 'exact', head: true })
+      .eq('trader_id', traderProfile.id)
+      .eq('status', 'published')
+      .then(({ count }) => {
+        if (cancelled) return;
+        setVouchCount(count ?? 0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [traderProfile]);
 
   if (!initializing && !session) return <Redirect href="/sign-in" />;
   if (checked && !traderProfile) return <Redirect href="/become-a-trader" />;
@@ -82,6 +100,9 @@ export default function MyTraderProfileScreen() {
           <ThemedView style={styles.headerText}>
             <ThemedText type="subtitle">{displayName}</ThemedText>
             <ThemedText themeColor="textSecondary">{statusLine(traderProfile)}</ThemedText>
+            {vouchCount !== null ? (
+              <ThemedText themeColor="textSecondary">{vouchCount} vouches received</ThemedText>
+            ) : null}
           </ThemedView>
         </ThemedView>
 

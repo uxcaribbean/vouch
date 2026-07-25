@@ -1,6 +1,7 @@
+import type { Tables } from '@vouch/shared';
 import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -25,6 +26,9 @@ type DirectoryRow = {
   phone_e164: string | null;
 };
 
+type VouchRow = Pick<Tables<'vouches'>, 'id' | 'voucher_user_id' | 'trade_id' | 'comment' | 'created_at' | 'status'>;
+type VoucherProfile = Pick<Tables<'public_profiles'>, 'id' | 'display_name'>;
+
 type LoadState = 'loading' | 'not_found' | 'ready';
 
 function formatMemberSince(dateStr: string): string {
@@ -32,14 +36,22 @@ function formatMemberSince(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+function formatVouchDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
 export default function PublicTraderProfileScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { session } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [state, setState] = useState<LoadState>(() => (id ? 'loading' : 'not_found'));
   const [directory, setDirectory] = useState<DirectoryRow | null>(null);
   const [joins, setJoins] = useState<TraderProfileWithJoins | null>(null);
   const [showReportNote, setShowReportNote] = useState(false);
+  const [vouches, setVouches] = useState<VouchRow[]>([]);
+  const [voucherProfiles, setVoucherProfiles] = useState<Record<string, VoucherProfile>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -66,6 +78,44 @@ export default function PublicTraderProfileScreen() {
     };
   }, [id]);
 
+  // Refetched on every focus (not just mount) so a vouch just submitted or
+  // removed in the M5 composer is reflected immediately on Back.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      let cancelled = false;
+      supabase
+        .from('vouches')
+        .select('id,voucher_user_id,trade_id,comment,created_at,status')
+        .eq('trader_id', id)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .then(async ({ data }) => {
+          if (cancelled) return;
+          const rows = (data ?? []) as VouchRow[];
+          setVouches(rows);
+          const voucherIds = Array.from(new Set(rows.map((r) => r.voucher_user_id)));
+          if (voucherIds.length === 0) {
+            setVoucherProfiles({});
+            return;
+          }
+          const { data: profiles } = await supabase
+            .from('public_profiles')
+            .select('id,display_name')
+            .in('id', voucherIds);
+          if (cancelled) return;
+          const map: Record<string, VoucherProfile> = {};
+          (profiles ?? []).forEach((p) => {
+            if (p.id) map[p.id] = p as VoucherProfile;
+          });
+          setVoucherProfiles(map);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [id]),
+  );
+
   if (state === 'loading') {
     return (
       <ThemedView style={styles.container}>
@@ -90,6 +140,19 @@ export default function PublicTraderProfileScreen() {
   const displayName = directory.business_name || directory.display_name || 'Trader';
   const isLapsed = directory.status === 'lapsed';
   const traderId = directory.trader_id ?? id;
+  const ownVouch = session ? vouches.find((v) => v.voucher_user_id === session.user.id) : undefined;
+
+  function handleVouchPress() {
+    if (!session) {
+      router.push('/sign-in');
+      return;
+    }
+    if (ownVouch) {
+      router.push({ pathname: '/vouch/[traderId]', params: { traderId, trade: String(ownVouch.trade_id) } });
+      return;
+    }
+    router.push({ pathname: '/vouch/[traderId]', params: { traderId } });
+  }
 
   function handleCall() {
     if (!directory?.phone_e164) return;
@@ -157,10 +220,34 @@ export default function PublicTraderProfileScreen() {
         </ThemedView>
 
         <ThemedView style={styles.block}>
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            Vouches
+          <ThemedText type="subtitle">
+            {vouches.length > 0 ? `${vouches.length} vouches` : 'New on VOUCH — no vouches yet'}
           </ThemedText>
-          <ThemedText themeColor="textSecondary">Vouches arrive in M5</ThemedText>
+          {vouches.length > 0 ? (
+            <ThemedView style={styles.vouchList}>
+              {vouches.map((v) => {
+                const voucherName = voucherProfiles[v.voucher_user_id]?.display_name ?? 'A member';
+                const tradeName =
+                  (joins?.trader_trades ?? []).find((t) => t.trade_id === v.trade_id)?.trades?.name ?? 'Service';
+                return (
+                  <ThemedView key={v.id} style={[styles.vouchCard, { backgroundColor: theme.backgroundElement }]}>
+                    <ThemedView style={styles.vouchHeaderRow}>
+                      <ThemedText type="smallBold" style={styles.vouchName}>
+                        {voucherName}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {formatVouchDate(v.created_at)}
+                      </ThemedText>
+                    </ThemedView>
+                    <ThemedView style={[styles.miniChip, { backgroundColor: theme.backgroundSelected }]}>
+                      <ThemedText type="small">{tradeName}</ThemedText>
+                    </ThemedView>
+                    {v.comment ? <ThemedText type="small">{v.comment}</ThemedText> : null}
+                  </ThemedView>
+                );
+              })}
+            </ThemedView>
+          ) : null}
         </ThemedView>
 
         {!isLapsed && directory.phone_e164 ? (
@@ -171,10 +258,11 @@ export default function PublicTraderProfileScreen() {
         ) : null}
 
         <ThemedView style={styles.actions}>
-          <Button label="Vouch for this trader" disabled />
-          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            (arrives in M5)
-          </ThemedText>
+          <Button
+            label={ownVouch ? 'Update your vouch ✓' : 'Vouch for this trader'}
+            variant={ownVouch ? 'soft' : 'solid'}
+            onPress={handleVouchPress}
+          />
         </ThemedView>
 
         <ThemedView style={styles.reportBlock}>
@@ -255,8 +343,29 @@ const styles = StyleSheet.create({
   actions: {
     gap: Spacing.three,
   },
-  center: {
-    textAlign: 'center',
+  vouchList: {
+    gap: Spacing.two,
+  },
+  vouchCard: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  vouchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  vouchName: {
+    flex: 1,
+  },
+  miniChip: {
+    alignSelf: 'flex-start',
+    minHeight: 28,
+    borderRadius: 14,
+    paddingHorizontal: Spacing.two,
+    justifyContent: 'center',
   },
   reportBlock: {
     gap: Spacing.one,

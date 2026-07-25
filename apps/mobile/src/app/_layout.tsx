@@ -26,6 +26,7 @@ export default function RootLayout() {
           <Stack.Screen name="become-a-trader" options={{ title: 'Offer your services' }} />
           <Stack.Screen name="my-trader-profile" options={{ title: 'My trader listing' }} />
           <Stack.Screen name="trader/[id]" options={{ title: '', headerShown: true }} />
+          <Stack.Screen name="vouch/[traderId]" options={{ title: 'Vouch' }} />
         </Stack>
       </AuthProvider>
     </ThemeProvider>

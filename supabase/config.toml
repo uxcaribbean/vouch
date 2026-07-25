@@ -438,3 +438,13 @@ entrypoint = "./functions/delete-account/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/upsert-trader-profile/index.ts"
+
+[functions.upsert-vouch]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/upsert-vouch/index.ts"
+
+[functions.remove-vouch]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/remove-vouch/index.ts"

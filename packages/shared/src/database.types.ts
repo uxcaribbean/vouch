@@ -490,6 +490,78 @@ export type Database = {
           },
         ]
       }
+      vouches: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          source: string
+          status: string
+          trade_id: number
+          trader_id: string
+          updated_at: string
+          voucher_user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          source: string
+          status?: string
+          trade_id: number
+          trader_id: string
+          updated_at?: string
+          voucher_user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          source?: string
+          status?: string
+          trade_id?: number
+          trader_id?: string
+          updated_at?: string
+          voucher_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vouches_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vouches_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_directory"
+            referencedColumns: ["trader_id"]
+          },
+          {
+            foreignKeyName: "vouches_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vouches_voucher_user_id_fkey"
+            columns: ["voucher_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vouches_voucher_user_id_fkey"
+            columns: ["voucher_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       public_profiles: {

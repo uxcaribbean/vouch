@@ -18,7 +18,8 @@ for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
 | M1 Auth & identity | ✅ built (server flows verified end-to-end locally) |
 | M2 Trader profiles | ✅ built (24 server-side acceptance checks) |
 | M3 Directory search & browse | ✅ built (P95 18.6ms @ 10k traders; 11 search checks) |
-| M5 Vouches | next up (spec order: M5 before M4) |
+| M5 Vouches | ✅ built (24-check suite; gate + rate limit server-enforced; P95 25.8ms with live counts) |
+| M4 Contact sync & matching | next up |
 
 ## Layout
 

@@ -16,8 +16,8 @@ the way, and where the landmines are. Repo conventions live in
 | M1 Auth & identity | ✅ | `M0+M1` | `scripts/acceptance/test-m1.mjs` (21 checks) |
 | M2 Trader profiles | ✅ | `M2` | `test-m2.mjs` (24 checks) |
 | M3 Directory search | ✅ | `M3` | `test-m3.mjs` (11 checks) + perf P95 18.6ms @ 10k traders |
-| M5 Vouches | **next** | — | — |
-| M4 Contact sync | after M5 | — | — |
+| M5 Vouches | ✅ | `M5` | `test-m5.mjs` (24 checks) + perf P95 25.8ms with live counts |
+| M4 Contact sync | **next** | — | — |
 | M6→M10 | per spec order | — | — |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
@@ -155,18 +155,18 @@ Current demo data after `verify:acceptance`: Keisha Mohammed
 
 ## 5. The next modules — what to know before starting
 
-**M5 Vouches (next):** spec §M5. The gate (rule 3) is the tricky part — a
-voucher must know the trader: (a) trader's phone_hash in voucher's
-`contact_hashes` (test by seeding rows directly until M4), (b) invite token
-(M6/M7 — can't be satisfied yet), or (c) `contact_tapped` event on that
-trader ≥7 days old (events already flowing from M3; for tests, backdate
-`events.created_at` directly). Enforce in an edge function, never
-client-side. Also: unique (voucher, trader, trade); ≤400-char comment;
-self-vouch blocked; new accounts (<24h) max 5 vouches; removal decrements
-counts; `CREATE OR REPLACE search_traders` with real `vouch_count`; update
-the trader profile screens' vouch placeholders; confetti moment on submit.
+**M5 Vouches — shipped 2026-07-25.** Gate enforced in `upsert-vouch`
+(edge function): contact-hash match, invite-token slot (deliberately inert
+until M6/M7 wires the invites table — the function already accepts the
+param), or `contact_tapped` event ≥7 days old. Comment edits skip the
+gate; republishing a self-removed vouch re-checks it; only true creation
+hits the <24h/5-vouch cap; `removed_by_admin` rows are permanently locked.
+`search_traders` now returns real `vouch_count` (published only).
+Known nit: a concurrent create race returns 500 instead of folding into
+the edit path (composer disables its submit while busy — revisit if it
+ever shows up in events).
 
-**M4 Contact sync:** batches of 500 hashes, full replace per sync, via edge
+**M4 Contact sync (next):** batches of 500 hashes, full replace per sync, via edge
 function only; `friend_vouches`/`trader_summary` derived queries (spec §3);
 replace `friend_vouch_count` in the RPC; the reverse prompt ("N people you
 know are traders — vouch for them"); `expo-contacts` permission copy per
