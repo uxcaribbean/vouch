@@ -135,13 +135,19 @@ Deno.serve(async (req) => {
   const phone = normalizeAndHash(`+${user.phone.replace(/^\+/, "")}`);
   if (!phone) return json({ error: "invalid_phone" }, 400);
 
-  const { data: region } = await db
-    .from("regions")
-    .select("id, enabled, parent_id")
-    .eq("id", home_region_id)
-    .maybeSingle();
-  if (!region?.enabled || region.parent_id === null) {
-    return json({ error: "invalid_region" }, 400);
+  // M7: the region is optional. The no-install web flow (spec M7.2) creates
+  // minimal accounts — display name only — so an absent region is valid and
+  // stored as null. When one IS supplied it must still be a real, enabled
+  // child region.
+  if (home_region_id !== undefined) {
+    const { data: region } = await db
+      .from("regions")
+      .select("id, enabled, parent_id")
+      .eq("id", home_region_id)
+      .maybeSingle();
+    if (!region?.enabled || region.parent_id === null) {
+      return json({ error: "invalid_region" }, 400);
+    }
   }
 
   // Resolve the referrer up front so a typo'd code fails loudly, not silently.
@@ -166,7 +172,7 @@ Deno.serve(async (req) => {
         phone_e164: phone.e164,
         phone_hash: phone.hash,
         display_name,
-        home_region_id,
+        home_region_id: home_region_id ?? null,
         referral_code: generateReferralCode(),
         referred_by_user_id: referrerId,
       })

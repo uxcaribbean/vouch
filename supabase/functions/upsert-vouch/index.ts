@@ -43,6 +43,10 @@ const BodySchema = z.object({
   // M6/M7: a vouch-request invite token scoped to this trader satisfies
   // gate (b) below. Invalid/expired/mismatched/join tokens just don't.
   invite_token: z.string().trim().min(1).optional(),
+  // M7: which channel this vouch came in through. 'weblink' is the
+  // no-install /v/{token} web flow; anything outside the enum is a bad
+  // client, not a new channel, so zod rejects it as invalid_input.
+  source: z.enum(["app", "weblink"]).default("app"),
 });
 
 Deno.serve(async (req) => {
@@ -59,7 +63,7 @@ Deno.serve(async (req) => {
       400,
     );
   }
-  const { trader_id, trade_id, comment, invite_token } = parsed.data;
+  const { trader_id, trade_id, comment, invite_token, source } = parsed.data;
 
   const db = serviceClient();
 
@@ -220,7 +224,9 @@ Deno.serve(async (req) => {
       trader_id,
       trade_id,
       comment,
-      source: "app",
+      // Set once, at creation. Edits and republishes deliberately leave it
+      // alone: source records the channel the vouch originally came from.
+      source,
     })
     .select()
     .single();
@@ -232,7 +238,7 @@ Deno.serve(async (req) => {
   await db.from("events").insert({
     user_id: caller.id,
     name: "vouch_created",
-    props: { trader_id, trade_id, source: "app" },
+    props: { trader_id, trade_id, source },
   });
 
   return json({ vouch: created, created: true }, 201);

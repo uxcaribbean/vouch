@@ -11,6 +11,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // @vouch/shared is raw TS shared with the Deno edge functions, which
+    // require explicit .ts extensions on every import (matches apps/mobile).
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

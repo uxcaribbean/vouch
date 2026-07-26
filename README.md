@@ -21,7 +21,8 @@ for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
 | M5 Vouches | ✅ built (24-check suite; gate + rate limit server-enforced; P95 25.8ms with live counts) |
 | M4 Contact sync & matching | ✅ built (26-check suite; P95 238.5ms @ 1M hashes — spec budget 500ms) |
 | M6 Invites, referrals & credits | ✅ built (24-check suite; farming defense + 24/yr cap; gate (b) wired) |
-| M7 Web vouch flow (no-install) | next up |
+| M7 Web vouch flow (no-install) | ✅ built (15-check suite; cold visitor → published vouch well under 60s) |
+| M8 Notifications & nudges | next up |
 
 ## Layout
 

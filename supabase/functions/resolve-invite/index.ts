@@ -27,6 +27,17 @@ Deno.serve(async (req) => {
 
   const db = serviceClient();
 
+  /** M7/M11 must-track: every SUCCESSFUL resolve is a link open. The token
+   * is a bearer credential — it never goes into props, and failed/expired
+   * resolves log nothing at all. */
+  async function logOpened(kind: string, traderId: string | null) {
+    await db.from("events").insert({
+      user_id: null,
+      name: "invite_link_opened",
+      props: { kind, trader_id: traderId },
+    });
+  }
+
   const { data: invite } = await db
     .from("invites")
     .select("kind, trader_id, expires_at, inviter_user_id")
@@ -54,24 +65,40 @@ Deno.serve(async (req) => {
       .eq("id", trader.user_id)
       .maybeSingle();
 
+    // The web composer needs trade ids to submit a vouch; trade_names stays
+    // for the M6 contract and anything already rendering plain labels.
     const { data: tradeRows } = await db
       .from("trader_trades")
-      .select("trades(name)")
+      .select("trades(id, name)")
       .eq("trader_id", trader.id);
-    const tradeNames = (tradeRows ?? [])
-      .map((r) => (r as { trades: { name: string } | null }).trades?.name)
-      .filter((name): name is string => !!name);
+    type Trade = { id: number; name: string };
+    const trades = (tradeRows ?? [])
+      .map((r) => (r as { trades: Trade | null }).trades)
+      .filter((t): t is Trade => !!t);
+    const tradeNames = trades.map((t) => t.name);
+
+    // The inviter's referral code — public by design, and the success
+    // screen's "Join free" CTA carries it. Mirrors join_invite below.
+    const { data: inviter } = await db
+      .from("users")
+      .select("referral_code")
+      .eq("id", invite.inviter_user_id)
+      .maybeSingle();
+
+    await logOpened("vouch_request", trader.id);
 
     return json({
       valid: true,
       kind: "vouch_request",
       expires_at: invite.expires_at,
+      referral_code: inviter?.referral_code ?? null,
       trader: {
         trader_id: trader.id,
         display_name: owner?.display_name ?? null,
         business_name: trader.business_name,
         photo_url: trader.photo_url,
         avatar_url: owner?.avatar_url ?? null,
+        trades,
         trade_names: tradeNames,
       },
     });
@@ -84,6 +111,8 @@ Deno.serve(async (req) => {
     .eq("id", invite.inviter_user_id)
     .maybeSingle();
   if (!inviter) return json({ valid: false });
+
+  await logOpened("join_invite", invite.trader_id);
 
   return json({
     valid: true,

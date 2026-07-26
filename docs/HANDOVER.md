@@ -19,7 +19,8 @@ the way, and where the landmines are. Repo conventions live in
 | M5 Vouches | ✅ | `M5` | `test-m5.mjs` (24 checks) + perf P95 25.8ms with live counts |
 | M4 Contact sync | ✅ | `M4` | `test-m4.mjs` (26 checks) + perf P95 238.5ms @ 1M hashes |
 | M6 Invites & referrals | ✅ | `M6` | `test-m6.mjs` (24 checks) |
-| M7→M10 | per spec order, M7 **next** | — | — |
+| M7 Web vouch flow | ✅ | `M7` | `test-m7.mjs` (15 checks) + reviewer-driven browser run |
+| M8→M10 | per spec order, M8 **next** | — | — |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -196,10 +197,24 @@ packages/shared/src/invites.ts. Executor model note: M6 screens were the
 first Opus-executed module (James's preference); backend was Sonnet.
 Device-pass still needed for the native contact picker + wa.me loop.
 
-**Then:** M7 web vouch flow (first real `apps/web` work — Next 16; cold
-visitor → published vouch < 60s; web-created users must later log into
-mobile with the same number), M8 push, M9 admin, M11 analytics dashboard,
-M10 billing last.
+**M7 Web vouch flow — shipped 2026-07-26.** `apps/web` is live: `/v/[token]`
+(server-rendered trader card + a single client-island stepper: phone →
+OTP → name-only account → composer → success CTAs) and `/join`. Web
+accounts have `home_region_id` null (CompleteProfileSchema made it
+optional); vouches carry `source: 'weblink'` (immutable once set);
+resolve-invite returns trades as {id,name} + the inviter's referral code
+and server-logs `invite_link_opened` (never the token). Next 16 notes for
+future work: params/searchParams are async in server components; wrap
+per-request fetches in React cache() when generateMetadata shares them
+(double-render means double side-effects otherwise); web tsconfig needed
+allowImportingTsExtensions for the shared package. Cold-visitor flow
+driven end-to-end by the reviewer in-browser: 5 interactions, instant
+transitions — comfortably under the 60s bar.
+
+**Then:** M8 push notifications (Expo tokens, per-type toggles, 2/week cap
+server-enforced via a notification_log), M9 admin + trust/safety (the
+private_blocks table and proposed-trades queue already exist), M11
+analytics dashboard (events are flowing already), M10 billing last.
 
 **Small known debts:** avatar upload UI deferred from M1 (bucket + policies
 ready; photo upload exists in the trader wizard — reuse that pattern);

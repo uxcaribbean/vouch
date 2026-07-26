@@ -35,10 +35,13 @@ export const DisplayNameSchema = z
   .min(2, "Name is too short")
   .max(50, "Name is too long");
 
-/** M1 — payload for completing a new user's profile after OTP. */
+/** M1 — payload for completing a new user's profile after OTP.
+ * home_region_id optional since M7: the no-install web flow creates
+ * minimal accounts (display name only, spec M7.2); mobile still collects
+ * a region in its own UI. */
 export const CompleteProfileSchema = z.object({
   display_name: DisplayNameSchema,
-  home_region_id: z.number().int().positive(),
+  home_region_id: z.number().int().positive().optional(),
   referral_code: ReferralCodeSchema.optional(),
 });
 export type CompleteProfileInput = z.infer<typeof CompleteProfileSchema>;
