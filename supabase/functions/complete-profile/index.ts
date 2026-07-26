@@ -17,7 +17,7 @@ const REFERRAL_CAP_PER_YEAR = 24;
 
 function addMonths(dateStr: string, months: number): string {
   const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 }
 

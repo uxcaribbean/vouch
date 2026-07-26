@@ -1,7 +1,7 @@
 import type { Tables } from '@vouch/shared';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -75,7 +75,6 @@ export default function PublicTraderProfileScreen() {
   const [state, setState] = useState<LoadState>(() => (id ? 'loading' : 'not_found'));
   const [directory, setDirectory] = useState<DirectoryRow | null>(null);
   const [joins, setJoins] = useState<TraderProfileWithJoins | null>(null);
-  const [showReportNote, setShowReportNote] = useState(false);
   const [vouches, setVouches] = useState<VouchRow[]>([]);
   const [voucherProfiles, setVoucherProfiles] = useState<Record<string, VoucherProfile>>({});
   const [summary, setSummary] = useState<TraderSummary | null>(null);
@@ -144,6 +143,18 @@ export default function PublicTraderProfileScreen() {
         cancelled = true;
       };
     }, [id]),
+  );
+
+  // Spec M11 must-track: profile_viewed. Logged-in only (trackEvent no-ops
+  // without a session) and once per mount, so bouncing back from the vouch
+  // composer doesn't inflate the count.
+  const viewTracked = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || !session || viewTracked.current) return;
+      viewTracked.current = true;
+      void trackEvent(session, 'profile_viewed', { trader_id: id });
+    }, [id, session]),
   );
 
   if (state === 'loading') {
@@ -291,6 +302,24 @@ export default function PublicTraderProfileScreen() {
                       <ThemedText type="small">{tradeName}</ThemedText>
                     </ThemedView>
                     {v.comment ? <ThemedText type="small">{v.comment}</ThemedText> : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Report ${voucherName}'s vouch`}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/report',
+                          params: {
+                            subject_type: 'vouch',
+                            subject_id: v.id,
+                            subject_label: `${voucherName}'s vouch for ${displayName}`,
+                          },
+                        })
+                      }
+                      style={styles.vouchReportRow}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Report
+                      </ThemedText>
+                    </Pressable>
                   </ThemedView>
                 );
               })}
@@ -313,20 +342,21 @@ export default function PublicTraderProfileScreen() {
           />
         </ThemedView>
 
+        {/* Spec M9.1 — factual problems only; the composer says so out loud. */}
         <ThemedView style={styles.reportBlock}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setShowReportNote((v) => !v)}
+            onPress={() =>
+              router.push({
+                pathname: '/report',
+                params: { subject_type: 'trader', subject_id: traderId, subject_label: displayName },
+              })
+            }
             style={styles.reportRow}>
             <ThemedText type="small" themeColor="textSecondary">
               Report this listing
             </ThemedText>
           </Pressable>
-          {showReportNote ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              (reporting arrives in M9)
-            </ThemedText>
-          ) : null}
         </ThemedView>
       </ScrollView>
     </ThemedView>
@@ -423,6 +453,11 @@ const styles = StyleSheet.create({
     minHeight: 28,
     borderRadius: 14,
     paddingHorizontal: Spacing.two,
+    justifyContent: 'center',
+  },
+  vouchReportRow: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
     justifyContent: 'center',
   },
   reportBlock: {

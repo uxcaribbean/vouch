@@ -34,6 +34,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string
+          created_at: string
+          id: string
+          meta: Json
+          note: string | null
+          subject_id: string | null
+          subject_type: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          created_at?: string
+          id?: string
+          meta?: Json
+          note?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          created_at?: string
+          id?: string
+          meta?: Json
+          note?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_hashes: {
         Row: {
           created_at: string
@@ -142,6 +190,77 @@ export type Database = {
           {
             foreignKeyName: "events_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flags: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: string
+          reason: string
+          reporter_user_id: string
+          resolution_note: string | null
+          resolved_by: string | null
+          status: string
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          reason: string
+          reporter_user_id: string
+          resolution_note?: string | null
+          resolved_by?: string | null
+          status?: string
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          reason?: string
+          reporter_user_id?: string
+          resolution_note?: string | null
+          resolved_by?: string | null
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flags_reporter_user_id_fkey"
+            columns: ["reporter_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flags_reporter_user_id_fkey"
+            columns: ["reporter_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flags_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flags_resolved_by_fkey"
+            columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -652,6 +771,7 @@ export type Database = {
           referral_code: string
           referred_by_user_id: string | null
           role: string
+          suspended_at: string | null
           updated_at: string
         }
         Insert: {
@@ -667,6 +787,7 @@ export type Database = {
           referral_code: string
           referred_by_user_id?: string | null
           role?: string
+          suspended_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -682,6 +803,7 @@ export type Database = {
           referral_code?: string
           referred_by_user_id?: string | null
           role?: string
+          suspended_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -838,6 +960,19 @@ export type Database = {
       }
     }
     Functions: {
+      admin_merge_trade: {
+        Args: { p_from: number; p_into: number }
+        Returns: undefined
+      }
+      admin_metrics: { Args: never; Returns: Json }
+      admin_ring_report: {
+        Args: never
+        Returns: {
+          new_voucher_count: number
+          trader_id: string
+          trader_name: string
+        }[]
+      }
       contacts_on_vouch: {
         Args: never
         Returns: {

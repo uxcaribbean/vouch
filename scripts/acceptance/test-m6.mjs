@@ -26,7 +26,7 @@ const check = (name, cond, extra = "") => {
 const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 const addMonths = (dateStr, months) => {
   const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 };
 

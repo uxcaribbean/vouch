@@ -72,12 +72,15 @@ Deno.serve(async (req) => {
   // -- b: caller must be a real, live member --------------------------------
   const { data: caller } = await db
     .from("users")
-    .select("id, created_at, deleted_at")
+    .select("id, created_at, deleted_at, suspended_at")
     .eq("id", user.id)
     .maybeSingle();
   if (!caller || caller.deleted_at) {
     return json({ error: "profile_incomplete" }, 400);
   }
+  // M9: a suspended account is frozen out of every write path, before any
+  // other work happens.
+  if (caller.suspended_at) return json({ error: "account_suspended" }, 403);
 
   // -- c: trader must exist and be listed ------------------------------------
   const { data: trader } = await db

@@ -54,7 +54,7 @@ async function rest(path, key, token = key, init = {}) {
 }
 function addMonths(date, months) {
   const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 }
 

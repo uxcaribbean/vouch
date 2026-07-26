@@ -50,12 +50,15 @@ Deno.serve(async (req) => {
   // -- b: caller must be a real, live member --------------------------------
   const { data: caller } = await db
     .from("users")
-    .select("id, deleted_at, contact_sync_enabled")
+    .select("id, deleted_at, contact_sync_enabled, suspended_at")
     .eq("id", user.id)
     .maybeSingle();
   if (!caller || caller.deleted_at) {
     return json({ error: "profile_incomplete" }, 400);
   }
+  // M9: a suspended account is frozen out of every write path, before any
+  // other work happens.
+  if (caller.suspended_at) return json({ error: "account_suspended" }, 403);
 
   // -- c: light rate limit ----------------------------------------------------
   const windowStart = new Date(

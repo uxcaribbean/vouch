@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@vouch/web", "dev"],
       "port": 3000
+    },
+    {
+      "name": "web-3100",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@vouch/web", "exec", "next", "dev", "-p", "3100"],
+      "port": 3100
     }
   ]
 }

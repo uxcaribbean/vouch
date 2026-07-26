@@ -472,6 +472,24 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/run-nudges/index.ts"
 
+[functions.submit-flag]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/submit-flag/index.ts"
+
+[functions.admin-action]
+enabled = true
+# Admin surface: the JWT only proves who is calling. The real gate is the
+# role='admin' check inside the function (M9) — verify_jwt alone would let
+# any signed-in member in.
+verify_jwt = true
+entrypoint = "./functions/admin-action/index.ts"
+
+[functions.admin-lookup]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/admin-lookup/index.ts"
+
 [functions.resolve-invite]
 enabled = true
 # PUBLIC: anon hits this before any auth, resolving a /v/{token} share link

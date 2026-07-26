@@ -17,7 +17,7 @@ import { getAuthUser, serviceClient } from "../_shared/supabase.ts";
 
 function addMonths(date: Date, months: number): string {
   const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 }
 

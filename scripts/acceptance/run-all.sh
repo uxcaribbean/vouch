@@ -5,6 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Date math must agree with the UTC edge runtime regardless of the host's
+# timezone (a London host once shifted month arithmetic across a DST
+# boundary — found by the M9 executor).
+export TZ=UTC
+
 echo "— resetting local database (migrations + seeds reapply)"
 supabase db reset
 
@@ -18,6 +23,8 @@ node scripts/acceptance/test-m4.mjs
 node scripts/acceptance/test-m6.mjs
 node scripts/acceptance/test-m7.mjs
 node scripts/acceptance/test-m8.mjs
+node scripts/acceptance/test-m9.mjs
+node scripts/acceptance/test-m11.mjs
 
 echo
 echo "All acceptance suites passed."

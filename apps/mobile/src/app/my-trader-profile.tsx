@@ -138,6 +138,12 @@ export default function MyTraderProfileScreen() {
             variant="soft"
             onPress={() => router.push(`/trader/${traderProfile.id}`)}
           />
+          {/* Spec M9.2 — private block list; nobody but this trader sees it. */}
+          <Button
+            label="Blocked numbers"
+            variant="soft"
+            onPress={() => router.push('/blocked-numbers')}
+          />
         </ThemedView>
       </ScrollView>
     </ThemedView>
