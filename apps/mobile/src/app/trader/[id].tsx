@@ -29,6 +29,14 @@ type DirectoryRow = {
 type VouchRow = Pick<Tables<'vouches'>, 'id' | 'voucher_user_id' | 'trade_id' | 'comment' | 'created_at' | 'status'>;
 type VoucherProfile = Pick<Tables<'public_profiles'>, 'id' | 'display_name'>;
 
+/** trader_summary's Returns type is untyped Json server-side (packages/shared) — this is its real shape (scripts/acceptance/test-m4.mjs). */
+type TraderSummary = {
+  vouch_count_total: number;
+  vouch_count_by_trade: Record<string, number>;
+  friend_vouch_count: number;
+  friend_voucher_names: string[];
+};
+
 type LoadState = 'loading' | 'not_found' | 'ready';
 
 function formatMemberSince(dateStr: string): string {
@@ -41,10 +49,28 @@ function formatVouchDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** Spec M4.3 — names come from the platform (voucher display names), never the viewer's address book. */
+function friendBlockText(names: string[], friendCount: number): string | null {
+  if (friendCount <= 0 || names.length === 0) return null;
+  const suffix =
+    friendCount > names.length
+      ? ` and ${friendCount - names.length} others you know`
+      : friendCount > 1 && names.length > 1
+        ? ' — people you know'
+        : ' — someone you know';
+  return `Vouched for by ${joinNames(names)}${suffix}`;
+}
+
 export default function PublicTraderProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [state, setState] = useState<LoadState>(() => (id ? 'loading' : 'not_found'));
   const [directory, setDirectory] = useState<DirectoryRow | null>(null);
@@ -52,6 +78,7 @@ export default function PublicTraderProfileScreen() {
   const [showReportNote, setShowReportNote] = useState(false);
   const [vouches, setVouches] = useState<VouchRow[]>([]);
   const [voucherProfiles, setVoucherProfiles] = useState<Record<string, VoucherProfile>>({});
+  const [summary, setSummary] = useState<TraderSummary | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -84,32 +111,35 @@ export default function PublicTraderProfileScreen() {
     useCallback(() => {
       if (!id) return;
       let cancelled = false;
-      supabase
-        .from('vouches')
-        .select('id,voucher_user_id,trade_id,comment,created_at,status')
-        .eq('trader_id', id)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .then(async ({ data }) => {
-          if (cancelled) return;
-          const rows = (data ?? []) as VouchRow[];
-          setVouches(rows);
-          const voucherIds = Array.from(new Set(rows.map((r) => r.voucher_user_id)));
-          if (voucherIds.length === 0) {
-            setVoucherProfiles({});
-            return;
-          }
-          const { data: profiles } = await supabase
-            .from('public_profiles')
-            .select('id,display_name')
-            .in('id', voucherIds);
-          if (cancelled) return;
-          const map: Record<string, VoucherProfile> = {};
-          (profiles ?? []).forEach((p) => {
-            if (p.id) map[p.id] = p as VoucherProfile;
-          });
-          setVoucherProfiles(map);
+      Promise.all([
+        supabase
+          .from('vouches')
+          .select('id,voucher_user_id,trade_id,comment,created_at,status')
+          .eq('trader_id', id)
+          .eq('status', 'published')
+          .order('created_at', { ascending: false }),
+        supabase.rpc('trader_summary', { p_trader_id: id }),
+      ]).then(async ([vouchesRes, summaryRes]) => {
+        if (cancelled) return;
+        const rows = (vouchesRes.data ?? []) as VouchRow[];
+        setVouches(rows);
+        setSummary((summaryRes.data as unknown as TraderSummary | null) ?? null);
+        const voucherIds = Array.from(new Set(rows.map((r) => r.voucher_user_id)));
+        if (voucherIds.length === 0) {
+          setVoucherProfiles({});
+          return;
+        }
+        const { data: profiles } = await supabase
+          .from('public_profiles')
+          .select('id,display_name')
+          .in('id', voucherIds);
+        if (cancelled) return;
+        const map: Record<string, VoucherProfile> = {};
+        (profiles ?? []).forEach((p) => {
+          if (p.id) map[p.id] = p as VoucherProfile;
         });
+        setVoucherProfiles(map);
+      });
       return () => {
         cancelled = true;
       };
@@ -221,8 +251,26 @@ export default function PublicTraderProfileScreen() {
 
         <ThemedView style={styles.block}>
           <ThemedText type="subtitle">
-            {vouches.length > 0 ? `${vouches.length} vouches` : 'New on VOUCH — no vouches yet'}
+            {(summary?.vouch_count_total ?? vouches.length) > 0
+              ? `${summary?.vouch_count_total ?? vouches.length} vouches`
+              : 'New on VOUCH — no vouches yet'}
           </ThemedText>
+          {summary && friendBlockText(summary.friend_voucher_names, summary.friend_vouch_count) ? (
+            <ThemedView style={[styles.friendBlock, { backgroundColor: theme.backgroundSelected }]}>
+              <ThemedText type="smallBold">
+                {friendBlockText(summary.friend_voucher_names, summary.friend_vouch_count)}
+              </ThemedText>
+            </ThemedView>
+          ) : session && profile && !profile.contact_sync_enabled ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/sync-contacts')}
+              style={[styles.nudgeRow, { backgroundColor: theme.backgroundElement }]}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Sync contacts to see if anyone you know vouches for people like this
+              </ThemedText>
+            </Pressable>
+          ) : null}
           {vouches.length > 0 ? (
             <ThemedView style={styles.vouchList}>
               {vouches.map((v) => {
@@ -342,6 +390,16 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: Spacing.three,
+  },
+  friendBlock: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  nudgeRow: {
+    minHeight: 44,
+    borderRadius: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    justifyContent: 'center',
   },
   vouchList: {
     gap: Spacing.two,

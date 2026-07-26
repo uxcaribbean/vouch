@@ -26,6 +26,19 @@ meaningful at volume: seed ~10k synthetic traders first with
 
 ```sh
 docker exec -i supabase_db_vouch psql -U postgres -v ON_ERROR_STOP=1 < scripts/acceptance/perf-seed.sql
-node scripts/acceptance/perf-m3.mjs        # expect P95 well under 500ms (last run: 18.6ms)
+node scripts/acceptance/perf-m3.mjs        # anon search; expect P95 well under 500ms
+docker exec -i supabase_db_vouch psql -U postgres < scripts/acceptance/perf-cleanup.sql
+```
+
+## Perf proof at spec scale (M4): 1M contact hashes
+
+The spec's hard budget (§6): search P95 < 500ms at 10k traders / 1M contact
+hashes with friend-matching active. Layer the M4 seed on top of the M3 one:
+
+```sh
+docker exec -i supabase_db_vouch psql -U postgres -v ON_ERROR_STOP=1 < scripts/acceptance/perf-seed.sql
+docker exec -i supabase_db_vouch psql -U postgres -v ON_ERROR_STOP=1 < scripts/acceptance/perf-seed-m4.sql
+node scripts/acceptance/perf-m4.mjs        # authed viewer with a 5k-contact book
+docker exec -i supabase_db_vouch psql -U postgres < scripts/acceptance/perf-cleanup-m4.sql
 docker exec -i supabase_db_vouch psql -U postgres < scripts/acceptance/perf-cleanup.sql
 ```

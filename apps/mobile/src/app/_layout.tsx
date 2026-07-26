@@ -23,6 +23,7 @@ export default function RootLayout() {
             options={{ title: 'Your details', headerBackVisible: false, gestureEnabled: false }}
           />
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+          <Stack.Screen name="sync-contacts" options={{ title: 'People you know' }} />
           <Stack.Screen name="become-a-trader" options={{ title: 'Offer your services' }} />
           <Stack.Screen name="my-trader-profile" options={{ title: 'My trader listing' }} />
           <Stack.Screen name="trader/[id]" options={{ title: '', headerShown: true }} />

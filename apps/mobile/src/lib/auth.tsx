@@ -5,10 +5,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
 
+import { maybeAutoResync } from "@/lib/contact-sync";
 import { supabase } from "@/lib/supabase";
 
 export type Profile = Tables<"users">;
@@ -65,6 +67,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data } = await supabase.auth.getSession();
     return loadProfile(data.session?.user.id);
   }, [loadProfile]);
+
+  // Foreground re-sync (spec M4.2, max once/24h) — fires once per app
+  // session, the first time both a session and a completed profile exist.
+  // maybeAutoResync no-ops unless permission was already granted and
+  // contact_sync_enabled is on, so this never prompts or spams retries.
+  const autoResyncedRef = useRef(false);
+  useEffect(() => {
+    if (autoResyncedRef.current || !session || !profile) return;
+    autoResyncedRef.current = true;
+    void maybeAutoResync(session, profile);
+  }, [session, profile]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

@@ -6,7 +6,7 @@ hardcode the brand in logic.**
 
 - Authoritative spec: [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC.md). Build modules in its stated order; don't build V2 items.
 - Full project state, decisions log, and per-module handover notes: [docs/HANDOVER.md](docs/HANDOVER.md) — **read this first when picking up work.**
-- Status: M0–M3 + M5 shipped (one commit per module, pushed to GitHub). **Next: M4 (contact sync & matching), then M6.**
+- Status: M0–M5 shipped (one commit per module, pushed to GitHub). **Next: M6 (invites, referrals & credits), then M7.**
 
 ## Iron rules
 
@@ -48,3 +48,8 @@ SMS is impossible locally (dummy Twilio creds — deliberate, see HANDOVER).
 - Phone validation uses `isPossible()` not `isValid()` — Google's pattern
   metadata rejects real exchanges (e.g. NANP 555). Don't "fix" this.
 - `docker exec` needs `-i` for stdin/heredocs.
+- SDK 57's `expo-contacts` main entry ships THROWING STUBS (new class API);
+  the working functional API is at `expo-contacts/legacy` — import that.
+- In-app-browser automation: synthetic clicks on RN-web Pressables can
+  silently no-op. Verify with a DOM `element.click()` via javascript_exec
+  before suspecting the app.

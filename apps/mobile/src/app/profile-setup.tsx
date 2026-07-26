@@ -76,7 +76,9 @@ export default function ProfileSetupScreen() {
     }
     await refreshProfile();
     setBusy(false);
-    router.replace('/(tabs)');
+    // Post-signup opt-in moment (spec M4.1) instead of dropping straight
+    // into the tabs — sync-contacts itself handles "Not now".
+    router.replace('/sync-contacts');
   }
 
   return (

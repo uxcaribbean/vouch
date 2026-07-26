@@ -26,7 +26,7 @@ type ResolvedResults = { key: string } & ({ status: 'ready'; rows: SearchRow[] }
 export default function SearchScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const params = useLocalSearchParams<{ q?: string; category?: string; trade?: string }>();
   const [region, setRegion] = useSelectedRegion();
   const [regions, setRegions] = useState<RegionOption[]>([]);
@@ -40,6 +40,9 @@ export default function SearchScreen() {
     params.trade ? Number(params.trade) : null,
   );
   const [searchAll, setSearchAll] = useState(false);
+  // "People I know" filter (spec M4.4) — logged-in + synced only.
+  const [friendsOnly, setFriendsOnly] = useState(false);
+  const canFilterFriends = Boolean(session && profile?.contact_sync_enabled);
   const [retryTick, setRetryTick] = useState(0);
   // `resolved` only ever changes inside the effect's async continuation
   // (never synchronously in the effect body) — "loading" is derived below by
@@ -72,14 +75,22 @@ export default function SearchScreen() {
       .then(({ data }) => setTrades(data ?? []));
   }, []);
 
+  const friendsFilterActive = canFilterFriends && friendsOnly;
   const requestKey =
-    selectedTradeId != null || searchAll ? `${selectedTradeId ?? 'all'}|${region.id}|${retryTick}` : null;
+    selectedTradeId != null || searchAll
+      ? `${selectedTradeId ?? 'all'}|${region.id}|${friendsFilterActive}|${retryTick}`
+      : null;
 
   useEffect(() => {
     if (requestKey == null) return;
     let cancelled = false;
     supabase
-      .rpc('search_traders', { p_trade_id: selectedTradeId ?? undefined, p_region_id: region.id, p_limit: 50 })
+      .rpc('search_traders', {
+        p_trade_id: selectedTradeId ?? undefined,
+        p_region_id: region.id,
+        p_friends_only: friendsFilterActive,
+        p_limit: 50,
+      })
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {
@@ -96,7 +107,7 @@ export default function SearchScreen() {
     return () => {
       cancelled = true;
     };
-  }, [requestKey, selectedTradeId, region.id]);
+  }, [requestKey, selectedTradeId, region.id, friendsFilterActive]);
 
   function selectTrade(trade: Pick<TradeOption, 'id' | 'name'>) {
     setSelectedTradeId(trade.id);
@@ -152,6 +163,14 @@ export default function SearchScreen() {
                 onPress={() => pickRegion(r)}
               />
             ))}
+          {canFilterFriends ? (
+            <ToggleChip
+              label="People I know"
+              role="checkbox"
+              selected={friendsOnly}
+              onPress={() => setFriendsOnly((v) => !v)}
+            />
+          ) : null}
         </ScrollView>
 
         {showPicker ? (
@@ -262,6 +281,7 @@ function TraderCard({ row, onPress }: { row: SearchRow; onPress: () => void }) {
   const shownTrades = tradeNames.slice(0, 2);
   const extraCount = tradeNames.length - shownTrades.length;
   const vouchLine = row.vouch_count > 0 ? `${row.vouch_count} vouches` : 'New on VOUCH';
+  const friendCount = row.friend_vouch_count ?? 0;
 
   return (
     <Pressable
@@ -305,6 +325,11 @@ function TraderCard({ row, onPress }: { row: SearchRow; onPress: () => void }) {
         <ThemedText type="small" themeColor="textSecondary">
           {regionNamesSummary(row.region_names)}
         </ThemedText>
+        {friendCount > 0 ? (
+          <ThemedText type="smallBold" style={styles.friendLine}>
+            {friendCount} {friendCount === 1 ? 'person' : 'people'} you know
+          </ThemedText>
+        ) : null}
         <ThemedText type="small" themeColor="textSecondary">
           {vouchLine}
         </ThemedText>
@@ -412,5 +437,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: Spacing.two,
     justifyContent: 'center',
+  },
+  friendLine: {
+    fontSize: 15,
   },
 });

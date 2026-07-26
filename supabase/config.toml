@@ -448,3 +448,8 @@ entrypoint = "./functions/upsert-vouch/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/remove-vouch/index.ts"
+
+[functions.sync-contacts]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/sync-contacts/index.ts"

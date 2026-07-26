@@ -17,8 +17,8 @@ the way, and where the landmines are. Repo conventions live in
 | M2 Trader profiles | ✅ | `M2` | `test-m2.mjs` (24 checks) |
 | M3 Directory search | ✅ | `M3` | `test-m3.mjs` (11 checks) + perf P95 18.6ms @ 10k traders |
 | M5 Vouches | ✅ | `M5` | `test-m5.mjs` (24 checks) + perf P95 25.8ms with live counts |
-| M4 Contact sync | **next** | — | — |
-| M6→M10 | per spec order | — | — |
+| M4 Contact sync | ✅ | `M4` | `test-m4.mjs` (26 checks) + perf P95 238.5ms @ 1M hashes |
+| M6→M10 | per spec order, M6 **next** | — | — |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -166,13 +166,21 @@ Known nit: a concurrent create race returns 500 instead of folding into
 the edit path (composer disables its submit while busy — revisit if it
 ever shows up in events).
 
-**M4 Contact sync (next):** batches of 500 hashes, full replace per sync, via edge
-function only; `friend_vouches`/`trader_summary` derived queries (spec §3);
-replace `friend_vouch_count` in the RPC; the reverse prompt ("N people you
-know are traders — vouch for them"); `expo-contacts` permission copy per
-spec M4.7; app must stay fully usable when permission is denied.
+**M4 Contact sync — shipped 2026-07-26.** sync-contacts edge function is
+the privacy boundary (ContactSyncBatchSchema only representable as sha256
+hex — raw numbers are structurally rejected); full-replace batches of 500;
+client hashing solely via shared `hashContactList`. Friend counts are
+DISTINCT PEOPLE, not vouch rows (reviewer correction — "N people you know"
+must count people; locked into test-m4.mjs). Perf at spec scale (1M
+hashes, 5k-contact viewer): P95 238.5ms vs 500ms budget — the tightest
+margin in the system; if it degrades, restrict friend-count computation to
+the paged window or materialize per-viewer counts before resorting to
+caching. SDK 57 gotcha: `expo-contacts` main entry throws — use
+`expo-contacts/legacy`. Native contact-read path needs a real
+device/simulator pass (web can't exercise it); everything else verified.
 
-**Then:** M6 invites/referrals (never auto-send; `wa.me` share only), M7 web
+**Then:** M6 invites/referrals (never auto-send; `wa.me` share only —
+upsert-vouch's invite_token slot is waiting to be wired), M7 web
 vouch flow (first real `apps/web` work), M8 push, M9 admin, M11 analytics
 dashboard, M10 billing last.
 

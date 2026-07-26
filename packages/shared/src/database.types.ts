@@ -620,9 +620,22 @@ export type Database = {
       }
     }
     Functions: {
+      contacts_on_vouch: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          business_name: string
+          display_name: string
+          photo_url: string
+          trade_names: string[]
+          trader_id: string
+          user_id: string
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       search_traders: {
         Args: {
+          p_friends_only?: boolean
           p_limit?: number
           p_offset?: number
           p_region_id?: number
@@ -643,6 +656,7 @@ export type Database = {
           vouch_count: number
         }[]
       }
+      trader_summary: { Args: { p_trader_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

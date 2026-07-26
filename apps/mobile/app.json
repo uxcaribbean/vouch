@@ -38,6 +38,12 @@
         {
           "photosPermission": "Lets you add a photo to your trader listing."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "VOUCH matches anonymous fingerprints of your contacts' numbers to show you traders vouched for by people you actually know. Names and numbers never leave your phone."
+        }
       ]
     ],
     "experiments": {
