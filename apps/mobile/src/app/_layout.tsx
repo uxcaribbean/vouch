@@ -26,6 +26,7 @@ export default function RootLayout() {
           <Stack.Screen name="sync-contacts" options={{ title: 'People you know' }} />
           <Stack.Screen name="become-a-trader" options={{ title: 'Offer your services' }} />
           <Stack.Screen name="my-trader-profile" options={{ title: 'My trader listing' }} />
+          <Stack.Screen name="ask-for-vouches" options={{ title: 'Ask for vouches' }} />
           <Stack.Screen name="trader/[id]" options={{ title: '', headerShown: true }} />
           <Stack.Screen name="vouch/[traderId]" options={{ title: 'Vouch' }} />
         </Stack>

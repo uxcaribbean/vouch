@@ -12,6 +12,97 @@ import { getAuthUser, serviceClient } from "../_shared/supabase.ts";
 
 const SIGNUP_BONUS_MONTHS = 6;
 const REFERRAL_CODE_ATTEMPTS = 5;
+const REFERRAL_CAP_PER_YEAR = 24;
+
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Referral crediting (spec M6.3), run once on the freshly-created-profile
+ * path only (never on the idempotent existing-profile early return).
+ * Order is contractual — see scripts/acceptance/test-m6.mjs:
+ *   a. farming defense — a phone number can only ever earn one credit
+ *   b. 24-referral-months/year cap
+ *   c. credit: +1 month ledger row, mark referrals.credited, extend the
+ *      referrer's free_until if they're a trader
+ */
+async function creditReferralIfEligible(
+  db: ReturnType<typeof serviceClient>,
+  args: {
+    referrerId: string;
+    referralId: string;
+    referredUserId: string;
+    referredPhoneHash: string;
+  },
+) {
+  const { referrerId, referralId, referredUserId, referredPhoneHash } = args;
+
+  // a. farming defense: this phone already earned a credit on another row.
+  const { data: reused } = await db
+    .from("referrals")
+    .select("id")
+    .eq("referred_phone_hash", referredPhoneHash)
+    .eq("credited", true)
+    .neq("referred_user_id", referredUserId)
+    .limit(1)
+    .maybeSingle();
+  if (reused) {
+    await db.from("events").insert({
+      user_id: referredUserId,
+      name: "referral_blocked",
+      props: { reason: "phone_reused", referrer: referrerId },
+    });
+    return;
+  }
+
+  // b. cap: 24 referral-months/user/year.
+  const yearAgo = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
+  const { count } = await db
+    .from("credit_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", referrerId)
+    .eq("reason", "referral")
+    .gte("created_at", yearAgo);
+  if ((count ?? 0) >= REFERRAL_CAP_PER_YEAR) {
+    await db.from("events").insert({
+      user_id: referredUserId,
+      name: "referral_cap_hit",
+      props: { referrer: referrerId },
+    });
+    return;
+  }
+
+  // c. credit.
+  await db.from("credit_ledger").insert({
+    user_id: referrerId,
+    months: 1,
+    reason: "referral",
+    ref_id: referralId,
+  });
+  await db.from("referrals").update({ credited: true }).eq("id", referralId);
+
+  const { data: referrerTrader } = await db
+    .from("trader_profiles")
+    .select("id, free_until")
+    .eq("user_id", referrerId)
+    .maybeSingle();
+  if (referrerTrader) {
+    await db
+      .from("trader_profiles")
+      .update({ free_until: addMonths(referrerTrader.free_until, 1) })
+      .eq("id", referrerTrader.id);
+  }
+
+  // Push notification ("Your free time just went up") is M8 — not here.
+  await db.from("events").insert({
+    user_id: referredUserId,
+    name: "referral_credited",
+    props: { referrer: referrerId },
+  });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -109,11 +200,25 @@ Deno.serve(async (req) => {
   });
 
   if (referrerId) {
-    // crediting the referrer happens in M6; this just records the edge
-    await db.from("referrals").insert({
-      referrer_user_id: referrerId,
-      referred_user_id: user.id,
-    });
+    const { data: referralRow, error: referralError } = await db
+      .from("referrals")
+      .insert({
+        referrer_user_id: referrerId,
+        referred_user_id: user.id,
+        referred_phone_hash: phone.hash,
+      })
+      .select("id")
+      .single();
+    if (referralError) {
+      console.error("referral row insert failed", referralError);
+    } else {
+      await creditReferralIfEligible(db, {
+        referrerId,
+        referralId: referralRow.id,
+        referredUserId: user.id,
+        referredPhoneHash: phone.hash,
+      });
+    }
   }
 
   await db.from("events").insert({

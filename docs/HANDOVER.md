@@ -18,7 +18,8 @@ the way, and where the landmines are. Repo conventions live in
 | M3 Directory search | ✅ | `M3` | `test-m3.mjs` (11 checks) + perf P95 18.6ms @ 10k traders |
 | M5 Vouches | ✅ | `M5` | `test-m5.mjs` (24 checks) + perf P95 25.8ms with live counts |
 | M4 Contact sync | ✅ | `M4` | `test-m4.mjs` (26 checks) + perf P95 238.5ms @ 1M hashes |
-| M6→M10 | per spec order, M6 **next** | — | — |
+| M6 Invites & referrals | ✅ | `M6` | `test-m6.mjs` (24 checks) |
+| M7→M10 | per spec order, M7 **next** | — | — |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -179,10 +180,26 @@ caching. SDK 57 gotcha: `expo-contacts` main entry throws — use
 `expo-contacts/legacy`. Native contact-read path needs a real
 device/simulator pass (web can't exercise it); everything else verified.
 
-**Then:** M6 invites/referrals (never auto-send; `wa.me` share only —
-upsert-vouch's invite_token slot is waiting to be wired), M7 web
-vouch flow (first real `apps/web` work), M8 push, M9 admin, M11 analytics
-dashboard, M10 billing last.
+**M6 Invites & referrals — shipped 2026-07-26.** Invite tokens are bearer
+capabilities: owner-only RLS, resolved publicly ONLY via resolve-invite
+(our first verify_jwt=false function — M7's page sits on it). Gate (b) in
+upsert-vouch is live (token bound to its trader, 30-day expiry). Crediting
+runs inside complete-profile at signup: farming defense via
+referrals.referred_phone_hash (a phone that earned a credit once never
+credits again — matters because account deletion frees numbers), 24
+months/365d cap, trader referrers get free_until +1 month directly.
+private_blocks pulled forward from M9 (contact picker pre-filters it).
+Links build from EXPO_PUBLIC_WEB_BASE_URL (localhost:3000 until the
+founders pick the real domain — spec §7 item 1). All shares are
+user-pressed wa.me / OS-share-sheet drafts; message templates live in
+packages/shared/src/invites.ts. Executor model note: M6 screens were the
+first Opus-executed module (James's preference); backend was Sonnet.
+Device-pass still needed for the native contact picker + wa.me loop.
+
+**Then:** M7 web vouch flow (first real `apps/web` work — Next 16; cold
+visitor → published vouch < 60s; web-created users must later log into
+mobile with the same number), M8 push, M9 admin, M11 analytics dashboard,
+M10 billing last.
 
 **Small known debts:** avatar upload UI deferred from M1 (bucket + policies
 ready; photo upload exists in the trader wizard — reuse that pattern);

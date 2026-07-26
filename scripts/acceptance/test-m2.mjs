@@ -71,7 +71,18 @@ const create = await fn("upsert-trader-profile", t1, {
 });
 check("create returns 201", create.status === 201, JSON.stringify(create.data));
 const prof = create.data?.profile;
-check("free_until = today + 6 ledger months", prof?.free_until === addMonths(new Date(), 6), prof?.free_until);
+// free_until = today + the sum of every month in the creator's ledger
+// (6 signup + any referral months already earned — M6 credits at signup).
+const { data: ledgerRows } = await rest(
+  `credit_ledger?user_id=eq.${prof?.user_id}&select=months`,
+  SERVICE,
+);
+const ledgerMonths = (ledgerRows ?? []).reduce((s, r) => s + r.months, 0);
+check(
+  `free_until = today + ledger months (${ledgerMonths})`,
+  prof?.free_until === addMonths(new Date(), ledgerMonths),
+  prof?.free_until,
+);
 check("3 trades attached", prof?.trader_trades?.length === 3);
 check(
   "proposed trade created & attached",

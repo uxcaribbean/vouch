@@ -6,7 +6,7 @@ hardcode the brand in logic.**
 
 - Authoritative spec: [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC.md). Build modules in its stated order; don't build V2 items.
 - Full project state, decisions log, and per-module handover notes: [docs/HANDOVER.md](docs/HANDOVER.md) — **read this first when picking up work.**
-- Status: M0–M5 shipped (one commit per module, pushed to GitHub). **Next: M6 (invites, referrals & credits), then M7.**
+- Status: M0–M6 shipped (one commit per module, pushed to GitHub). **Next: M7 (no-install web vouch flow — apps/web comes alive on resolve-invite), then M8.**
 
 ## Iron rules
 

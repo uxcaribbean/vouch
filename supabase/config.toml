@@ -272,6 +272,10 @@ max_frequency = "5s"
 18685550003 = "123456"
 18685550004 = "123456"
 18685550005 = "123456"
+18685550006 = "123456"
+18685550007 = "123456"
+18685550008 = "123456"
+18685550009 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -453,3 +457,16 @@ entrypoint = "./functions/remove-vouch/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/sync-contacts/index.ts"
+
+[functions.create-invite]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/create-invite/index.ts"
+
+[functions.resolve-invite]
+enabled = true
+# PUBLIC: anon hits this before any auth, resolving a /v/{token} share link
+# (spec M6/M7). No user data beyond already-public directory fields is ever
+# returned — see the function's own doc comment.
+verify_jwt = false
+entrypoint = "./functions/resolve-invite/index.ts"

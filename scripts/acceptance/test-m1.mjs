@@ -110,14 +110,12 @@ check("too-short name rejected", bad3.status === 400 && bad3.data?.error === "in
 
 // --- server-side state checks (service role) --------------------------------
 const ledger = await rest(
-  `credit_ledger?user_id=eq.${p1.data.profile.id}&select=months,reason`,
+  `credit_ledger?user_id=eq.${p1.data.profile.id}&reason=eq.signup_bonus&select=months,reason`,
   SERVICE,
 );
 check(
   "signup bonus +6 exactly once",
-  ledger.data?.length === 1 &&
-    ledger.data[0].months === 6 &&
-    ledger.data[0].reason === "signup_bonus",
+  ledger.data?.length === 1 && ledger.data[0].months === 6,
   JSON.stringify(ledger.data),
 );
 
@@ -126,8 +124,16 @@ const refs = await rest(
   SERVICE,
 );
 check(
-  "referrals row created, uncredited (crediting is M6)",
-  refs.data?.length === 1 && refs.data[0].credited === false,
+  "referrals row created and credited (M6 live)",
+  refs.data?.length === 1 && refs.data[0].credited === true,
+);
+const refLedger = await rest(
+  `credit_ledger?user_id=eq.${p1.data.profile.id}&reason=eq.referral&select=months`,
+  SERVICE,
+);
+check(
+  "referrer earned +1 referral month",
+  refLedger.data?.length === 1 && refLedger.data[0].months === 1,
 );
 
 const events = await rest(

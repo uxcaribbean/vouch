@@ -148,11 +148,107 @@ export type Database = {
           },
         ]
       }
+      invites: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          inviter_user_id: string
+          kind: string
+          token: string
+          trader_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          inviter_user_id: string
+          kind: string
+          token: string
+          trader_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          inviter_user_id?: string
+          kind?: string
+          token?: string
+          trader_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_inviter_user_id_fkey"
+            columns: ["inviter_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invites_inviter_user_id_fkey"
+            columns: ["inviter_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invites_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_directory"
+            referencedColumns: ["trader_id"]
+          },
+          {
+            foreignKeyName: "invites_trader_id_fkey"
+            columns: ["trader_id"]
+            isOneToOne: false
+            referencedRelation: "trader_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      private_blocks: {
+        Row: {
+          blocked_phone_hash: string
+          created_at: string
+          note: string | null
+          trader_user_id: string
+        }
+        Insert: {
+          blocked_phone_hash: string
+          created_at?: string
+          note?: string | null
+          trader_user_id: string
+        }
+        Update: {
+          blocked_phone_hash?: string
+          created_at?: string
+          note?: string | null
+          trader_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "private_blocks_trader_user_id_fkey"
+            columns: ["trader_user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_blocks_trader_user_id_fkey"
+            columns: ["trader_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referrals: {
         Row: {
           created_at: string
           credited: boolean
           id: string
+          referred_phone_hash: string | null
           referred_user_id: string
           referrer_user_id: string
         }
@@ -160,6 +256,7 @@ export type Database = {
           created_at?: string
           credited?: boolean
           id?: string
+          referred_phone_hash?: string | null
           referred_user_id: string
           referrer_user_id: string
         }
@@ -167,6 +264,7 @@ export type Database = {
           created_at?: string
           credited?: boolean
           id?: string
+          referred_phone_hash?: string | null
           referred_user_id?: string
           referrer_user_id?: string
         }

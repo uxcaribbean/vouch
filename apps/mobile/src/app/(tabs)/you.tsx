@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InviteAFriend } from '@/components/invite-a-friend';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ export default function AccountScreen() {
               variant="soft"
               onPress={() => router.push(traderId ? '/my-trader-profile' : '/become-a-trader')}
             />
+            <InviteAFriend />
             <Button label="Settings" variant="soft" onPress={() => router.push('/settings')} />
           </ThemedView>
         )}

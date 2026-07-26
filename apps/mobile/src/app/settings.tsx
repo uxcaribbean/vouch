@@ -2,6 +2,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
 
+import { InviteAFriend } from '@/components/invite-a-friend';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -154,9 +155,9 @@ export default function SettingsScreen() {
           <Row label="Phone" value={profile?.phone_e164 ?? session?.user.phone ?? '—'} />
           <Row label="Your referral code" value={profile?.referral_code ?? '—'} />
           <ThemedText type="small" themeColor="textSecondary">
-            Friends who join with your code get you +1 free month once invites
-            launch (M6).
+            Share your code — you get +1 free month when a friend joins with it.
           </ThemedText>
+          <InviteAFriend />
         </ThemedView>
 
         <ThemedView style={styles.block}>

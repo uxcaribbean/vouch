@@ -40,9 +40,8 @@ const BodySchema = z.object({
     .max(MAX_COMMENT_LENGTH)
     .optional()
     .transform((v) => (v ? v : null)),
-  // NOT WIRED until M6/M7 (invites table + token validation land there).
-  // Accepted here so the M7 web vouch flow can start sending it, but its
-  // presence does not yet satisfy the gate — see gatePasses() below.
+  // M6/M7: a vouch-request invite token scoped to this trader satisfies
+  // gate (b) below. Invalid/expired/mismatched/join tokens just don't.
   invite_token: z.string().trim().min(1).optional(),
 });
 
@@ -60,7 +59,7 @@ Deno.serve(async (req) => {
       400,
     );
   }
-  const { trader_id, trade_id, comment } = parsed.data;
+  const { trader_id, trade_id, comment, invite_token } = parsed.data;
 
   const db = serviceClient();
 
@@ -119,8 +118,20 @@ Deno.serve(async (req) => {
       if (contact) return true;
     }
 
-    // (2) invite_token: TODO(M6/M7) — invites table + token validation don't
-    // exist yet, so a token can never satisfy the gate today.
+    // (2) invite_token: a valid, unexpired vouch_request token scoped to
+    // this trader (M6/M7). Invalid/expired/mismatched/join tokens simply
+    // don't satisfy the gate — no special error surfaced to the caller.
+    if (invite_token) {
+      const { data: invite } = await db
+        .from("invites")
+        .select("id")
+        .eq("token", invite_token)
+        .eq("kind", "vouch_request")
+        .eq("trader_id", trader_id)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+      if (invite) return true;
+    }
 
     // (3) prior in-app contact ≥7 days ago (call/WhatsApp tap on this trader).
     const cutoff = new Date(

@@ -131,6 +131,7 @@ export default function MyTraderProfileScreen() {
         </ThemedView>
 
         <ThemedView style={styles.actions}>
+          <Button label="Ask for vouches" onPress={() => router.push('/ask-for-vouches')} />
           <Button label="Edit listing" onPress={() => router.push('/become-a-trader')} />
           <Button
             label="View public profile"
