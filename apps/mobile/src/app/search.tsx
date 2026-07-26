@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 
+import { InviteAFriend } from '@/components/invite-a-friend';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -102,6 +103,9 @@ export default function SearchScreen() {
           trade_id: selectedTradeId ?? null,
           region_id: region.id,
           results_count: data.length,
+          // Spec M11's north-star input: how many results carried a vouch
+          // from someone the searcher knows.
+          friend_results_count: data.filter((row) => (row.friend_vouch_count ?? 0) > 0).length,
         });
       });
     return () => {
@@ -256,7 +260,7 @@ export default function SearchScreen() {
               No {selectedTradeName ?? 'traders'} vouched in {region.name} yet — be the first to invite
               one.
             </ThemedText>
-            <Button label="Invite a trader (arrives with M6)" variant="soft" disabled />
+            <InviteAFriend />
           </ThemedView>
         ) : null}
 

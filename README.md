@@ -23,7 +23,9 @@ for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
 | M6 Invites, referrals & credits | ✅ built (24-check suite; farming defense + 24/yr cap; gate (b) wired) |
 | M7 Web vouch flow (no-install) | ✅ built (15-check suite; cold visitor → published vouch well under 60s) |
 | M8 Notifications & nudges | ✅ built (18-check suite; caps/toggles server-enforced via notification_log) |
-| M9 Trust, safety & admin | next up |
+| M9 Trust, safety & admin | ✅ built (30-check suite; audited admin actions, /admin dashboard) |
+| M11 Analytics & metrics | ✅ built (10-check suite; north-star dashboard at /admin/metrics) |
+| M10 Subscriptions & billing | last per spec — blocked on founder decisions (provider, TTD price, domain) |
 
 ## Layout
 

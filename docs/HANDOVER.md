@@ -21,7 +21,9 @@ the way, and where the landmines are. Repo conventions live in
 | M6 Invites & referrals | ✅ | `M6` | `test-m6.mjs` (24 checks) |
 | M7 Web vouch flow | ✅ | `M7` | `test-m7.mjs` (15 checks) + reviewer-driven browser run |
 | M8 Notifications | ✅ | `M8` | `test-m8.mjs` (18 checks) |
-| M9→M10 | per spec order, M9 **next** | — | — |
+| M9 Trust/safety/admin | ✅ | `M9` | `test-m9.mjs` (30 checks) + reviewer browser run |
+| M11 Analytics | ✅ | `M11` | `test-m11.mjs` (10 checks, recomputes from raw events) |
+| M10 Billing | **last** | — | blocked on founder decisions (spec §7) |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -230,10 +232,34 @@ STOPPED on four failing checks and argued the suite was wrong — it was
 (absolute counts vs. rows earlier suites now legitimately write);
 reviewer fixed the suite, not the implementation.
 
-**Then:** M9 admin + trust/safety (private_blocks + the proposed-trades
-queue already exist; needs flags table, admin role gating, apps/web
-/admin, audit log, ring-detection view), M11 analytics dashboard (events
-flowing since M1), M10 billing last.
+**M9 + M11 — shipped 2026-07-27.** All admin mutations flow through one
+audited chokepoint (admin-action edge function; exactly one audit_log row
+per action — the suite counts). Quiet vouch removal is verified as an
+ABSENCE in notification_log. merge_trade runs via an atomic definer SQL
+helper (delete-conflicts-then-repoint) — exercised on fixtures where the
+same voucher held vouches on both trades. Suspension (users.suspended_at,
+deliberately outside the client column grants) is enforced in upsert-vouch
+/create-invite/sync-contacts. admin_ring_report + admin_metrics are
+definer SQL; metrics RAISES for non-admins (an all-zero object would
+masquerade as data). /admin (apps/web): gate → flags queue with contextual
+actions + audit strip, taxonomy approve/merge, lookup with credit
+adjustments, rings, and /admin/metrics (north-star tiles, ~30% target
+callout). Mobile: /report flow (factual-problems framing), /blocked-numbers
+(hash-only, note-as-identifier, invisible to admins — asserted).
+Promote an admin: service-role `update users set role='admin' where id=…`.
+TZ LESSON (M9 executor find): JS setMonth is local-time — every addMonths
+is now setUTCMonth and run-all pins TZ=UTC; hosted edge regions must be
+UTC or date math reviewed. test-m11 note: its math is window-free and
+agrees with the SQL's 30-day windows only while fixtures are fresh —
+backdating an events row >30d in a future fixture will fail it by design.
+Ops notes: parallel executors share the one local DB and acceptance runs
+RESET it — serialize resets; port 3000 may be held by unrelated projects
+(use the `web-3100` launch entry).
+
+**Remaining:** M10 billing only (spec: design now, integrate later; blocked
+on founder decisions — provider [WiPay recommended], TTD price, domain).
+Plus the standing device-pass list: real OTP, contacts read, wa.me loop,
+EAS projectId + real push triggers.
 
 **Small known debts:** avatar upload UI deferred from M1 (bucket + policies
 ready; photo upload exists in the trader wizard — reuse that pattern);
