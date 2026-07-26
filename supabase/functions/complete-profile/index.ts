@@ -8,6 +8,7 @@ import { normalizeAndHash } from "../../../packages/shared/src/phone.ts";
 import { generateReferralCode } from "../../../packages/shared/src/referral.ts";
 import { CompleteProfileSchema } from "../../../packages/shared/src/schemas.ts";
 import { json, preflight } from "../_shared/http.ts";
+import { sendNotification } from "../_shared/notify.ts";
 import { getAuthUser, serviceClient } from "../_shared/supabase.ts";
 
 const SIGNUP_BONUS_MONTHS = 6;
@@ -27,7 +28,7 @@ function addMonths(dateStr: string, months: number): string {
  *   a. farming defense — a phone number can only ever earn one credit
  *   b. 24-referral-months/year cap
  *   c. credit: +1 month ledger row, mark referrals.credited, extend the
- *      referrer's free_until if they're a trader
+ *      referrer's free_until if they're a trader, push the referrer (M8)
  */
 async function creditReferralIfEligible(
   db: ReturnType<typeof serviceClient>,
@@ -35,10 +36,17 @@ async function creditReferralIfEligible(
     referrerId: string;
     referralId: string;
     referredUserId: string;
+    referredDisplayName: string;
     referredPhoneHash: string;
   },
 ) {
-  const { referrerId, referralId, referredUserId, referredPhoneHash } = args;
+  const {
+    referrerId,
+    referralId,
+    referredUserId,
+    referredDisplayName,
+    referredPhoneHash,
+  } = args;
 
   // a. farming defense: this phone already earned a credit on another row.
   const { data: reused } = await db
@@ -96,7 +104,21 @@ async function creditReferralIfEligible(
       .eq("id", referrerTrader.id);
   }
 
-  // Push notification ("Your free time just went up") is M8 — not here.
+  // M8: tell the referrer their free time just grew. Transactional, so the
+  // weekly cap never eats it. Never allowed to fail the credit above.
+  try {
+    await sendNotification(db, {
+      userId: referrerId,
+      type: "referral_credited",
+      title: "Your free time just went up ⏫",
+      body: `${referredDisplayName} joined with your code — +1 free month.`,
+      data: { referred_user_id: referredUserId, referral_id: referralId },
+      transactional: true,
+    });
+  } catch (notifyError) {
+    console.error("referral_credited notification failed", notifyError);
+  }
+
   await db.from("events").insert({
     user_id: referredUserId,
     name: "referral_credited",
@@ -222,6 +244,7 @@ Deno.serve(async (req) => {
         referrerId,
         referralId: referralRow.id,
         referredUserId: user.id,
+        referredDisplayName: display_name,
         referredPhoneHash: phone.hash,
       });
     }

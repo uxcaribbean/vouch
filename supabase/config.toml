@@ -463,6 +463,15 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/create-invite/index.ts"
 
+[functions.run-nudges]
+enabled = true
+# CRON-ONLY: no user session exists, so JWT verification is off and the
+# guard is the x-cron-secret header checked inside the function against
+# CRON_SECRET (local dev falls back to a fixed dev value). The hosted
+# project MUST set a real CRON_SECRET secret.
+verify_jwt = false
+entrypoint = "./functions/run-nudges/index.ts"
+
 [functions.resolve-invite]
 enabled = true
 # PUBLIC: anon hits this before any auth, resolving a /v/{token} share link

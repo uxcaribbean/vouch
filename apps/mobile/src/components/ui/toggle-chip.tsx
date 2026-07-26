@@ -10,6 +10,8 @@ type ToggleChipProps = {
   onPress: () => void;
   /** 'radio' for single-select groups (region pickers); 'checkbox' for multi-select. */
   role?: 'radio' | 'checkbox';
+  /** Override when the visible label is only meaningful next to a sibling row label (e.g. "On"/"Off"). */
+  accessibilityLabel?: string;
 };
 
 /**
@@ -17,12 +19,19 @@ type ToggleChipProps = {
  * chips (spec M2), reused here for the M3 region pickers so directory
  * screens match the wizard exactly.
  */
-export function ToggleChip({ label, selected, onPress, role = 'radio' }: ToggleChipProps) {
+export function ToggleChip({
+  label,
+  selected,
+  onPress,
+  role = 'radio',
+  accessibilityLabel,
+}: ToggleChipProps) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole={role}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, checked: selected }}
       style={[styles.chip, { backgroundColor: selected ? theme.text : theme.backgroundElement }]}>
       <ThemedText type="small" style={{ color: selected ? theme.background : theme.text }}>

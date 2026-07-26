@@ -20,7 +20,8 @@ the way, and where the landmines are. Repo conventions live in
 | M4 Contact sync | ✅ | `M4` | `test-m4.mjs` (26 checks) + perf P95 238.5ms @ 1M hashes |
 | M6 Invites & referrals | ✅ | `M6` | `test-m6.mjs` (24 checks) |
 | M7 Web vouch flow | ✅ | `M7` | `test-m7.mjs` (15 checks) + reviewer-driven browser run |
-| M8→M10 | per spec order, M8 **next** | — | — |
+| M8 Notifications | ✅ | `M8` | `test-m8.mjs` (18 checks) |
+| M9→M10 | per spec order, M9 **next** | — | — |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -211,10 +212,28 @@ allowImportingTsExtensions for the shared package. Cold-visitor flow
 driven end-to-end by the reviewer in-browser: 5 interactions, instant
 transitions — comfortably under the 60s bar.
 
-**Then:** M8 push notifications (Expo tokens, per-type toggles, 2/week cap
-server-enforced via a notification_log), M9 admin + trust/safety (the
-private_blocks table and proposed-trades queue already exist), M11
-analytics dashboard (events are flowing already), M10 billing last.
+**M8 Notifications — shipped 2026-07-26.** `notification_log` is the
+enforcement record: every send decision logged with status sent /
+no_token / error / skipped_pref / skipped_cap. All Expo sends go through
+`_shared/notify.ts` — the ONLY push path; 2/week cap for non-transactional
+types (vouch_received + referral_credited are exempt as transactional).
+Digests live in `run-nudges` (verify_jwt=false, guarded by x-cron-secret;
+local default 'local-dev-cron-secret' — HOSTED MUST SET CRON_SECRET and
+wire a scheduler, e.g. pg_cron → http). Sync nudge: 14-day spacing, stops
+after 3 'sync_nudge_dismissed' events (mobile logs them on "Not now").
+delete-account now sweeps push_tokens + notification_prefs (reviewer fix).
+Mobile: push registration silently no-ops until `extra.eas.projectId`
+exists (EAS wiring = device-pass item; "triggers fire on real devices"
+remains unproven until then); expo-notifications is lazy-imported so web
+never evaluates the push stack. Process note: the M8 executor correctly
+STOPPED on four failing checks and argued the suite was wrong — it was
+(absolute counts vs. rows earlier suites now legitimately write);
+reviewer fixed the suite, not the implementation.
+
+**Then:** M9 admin + trust/safety (private_blocks + the proposed-trades
+queue already exist; needs flags table, admin role gating, apps/web
+/admin, audit log, ring-detection view), M11 analytics dashboard (events
+flowing since M1), M10 billing last.
 
 **Small known debts:** avatar upload UI deferred from M1 (bucket + policies
 ready; photo upload exists in the trader wizard — reuse that pattern);

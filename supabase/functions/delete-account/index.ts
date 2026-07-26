@@ -44,6 +44,11 @@ Deno.serve(async (req) => {
     return json({ error: "delete_failed" }, 500);
   }
 
+  // Device rows are PII-adjacent (M8): push tokens identify a device,
+  // prefs are preferences of a person who no longer exists here.
+  await db.from("push_tokens").delete().eq("user_id", user.id);
+  await db.from("notification_prefs").delete().eq("user_id", user.id);
+
   const { data: avatarFiles } = await db.storage.from("avatars").list(user.id);
   if (avatarFiles?.length) {
     await db.storage

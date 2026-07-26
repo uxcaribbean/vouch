@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { maybeAutoResync } from "@/lib/contact-sync";
+import { configureNotifications, registerForPush } from "@/lib/notifications";
 import { supabase } from "@/lib/supabase";
 
 export type Profile = Tables<"users">;
@@ -77,6 +78,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (autoResyncedRef.current || !session || !profile) return;
     autoResyncedRef.current = true;
     void maybeAutoResync(session, profile);
+  }, [session, profile]);
+
+  // Foreground presentation + notification-tap routing (spec M8). Lives at
+  // provider level so a tap is handled once, wherever the app happens to be.
+  useEffect(() => {
+    let disposed = false;
+    let teardown: (() => void) | undefined;
+    void configureNotifications().then((dispose) => {
+      if (disposed) dispose();
+      else teardown = dispose;
+    });
+    return () => {
+      disposed = true;
+      teardown?.();
+    };
+  }, []);
+
+  // Push token registration, guarded exactly like the re-sync above: once per
+  // app session, only once a session and a completed profile both exist.
+  // registerForPush never throws and never blocks — no push is a normal state.
+  const pushRegisteredRef = useRef(false);
+  useEffect(() => {
+    if (pushRegisteredRef.current || !session || !profile) return;
+    pushRegisteredRef.current = true;
+    void registerForPush(session);
   }, [session, profile]);
 
   const signOut = useCallback(async () => {

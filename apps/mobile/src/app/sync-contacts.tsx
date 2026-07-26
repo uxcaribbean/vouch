@@ -100,6 +100,12 @@ export default function SyncContactsScreen() {
     router.push({ pathname: '/vouch/[traderId]', params: { traderId } });
   }
 
+  /** Spec M8: three of these and the server stops nudging this user for good. */
+  function handleNotNow() {
+    void trackEvent(activeSession, 'sync_nudge_dismissed', {});
+    router.back();
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView style={styles.inner} contentContainerStyle={styles.content}>
@@ -157,7 +163,7 @@ export default function SyncContactsScreen() {
                 <Button
                   label="Not now"
                   variant="soft"
-                  onPress={() => router.back()}
+                  onPress={handleNotNow}
                   disabled={state.kind === 'busy'}
                 />
               </ThemedView>

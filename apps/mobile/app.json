@@ -44,7 +44,8 @@
         {
           "contactsPermission": "VOUCH matches anonymous fingerprints of your contacts' numbers to show you traders vouched for by people you actually know. Names and numbers never leave your phone."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

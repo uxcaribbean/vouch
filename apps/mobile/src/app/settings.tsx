@@ -6,10 +6,20 @@ import { InviteAFriend } from '@/components/invite-a-friend';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { ToggleChip } from '@/components/ui/toggle-chip';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { trackEvent } from '@/lib/analytics';
 import { useAuth } from '@/lib/auth';
 import { formatLastSynced, getLastSyncedAt, requestAndSync } from '@/lib/contact-sync';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  loadNotificationPrefs,
+  NOTIFICATION_LABELS,
+  NOTIFICATION_TYPES,
+  setNotificationPref,
+  type NotificationPrefs,
+  type NotificationType,
+} from '@/lib/notifications';
 import { invokeFunction, supabase } from '@/lib/supabase';
 import { useTraderProfileId } from '@/lib/trader-profile';
 
@@ -25,9 +35,19 @@ export default function SettingsScreen() {
   const [disablingSync, setDisablingSync] = useState(false);
   const [syncDisabledNotice, setSyncDisabledNotice] = useState(false);
 
+  // Absent rows read as enabled, so the optimistic default is also the truth
+  // for every account that has never touched a toggle.
+  const [notifyPrefs, setNotifyPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+
   useEffect(() => {
     getLastSyncedAt().then(setLastSyncedAt);
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    void loadNotificationPrefs(session).then(setNotifyPrefs);
+  }, [session]);
 
   if (!initializing && !session) return <Redirect href="/(tabs)" />;
 
@@ -96,6 +116,18 @@ export default function SettingsScreen() {
     void trackEvent(session, 'contact_sync_disabled', {});
   }
 
+  async function handleToggleNotification(type: NotificationType) {
+    if (!session) return;
+    const next = !notifyPrefs[type];
+    setNotifyError(null);
+    setNotifyPrefs((current) => ({ ...current, [type]: next }));
+    const ok = await setNotificationPref(session, type, next);
+    if (!ok) {
+      setNotifyPrefs((current) => ({ ...current, [type]: !next }));
+      setNotifyError("That didn't save. Check your connection and try again.");
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView style={styles.inner} contentContainerStyle={styles.content}>
@@ -148,6 +180,36 @@ export default function SettingsScreen() {
               onPress={() => router.push('/sync-contacts')}
             />
           )}
+        </ThemedView>
+
+        <ThemedView style={styles.block}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Notifications
+          </ThemedText>
+
+          {NOTIFICATION_TYPES.map((type) => (
+            <ThemedView key={type} style={styles.notifyRow}>
+              <ThemedText style={styles.notifyLabel}>{NOTIFICATION_LABELS[type]}</ThemedText>
+              <ToggleChip
+                label={notifyPrefs[type] ? 'On' : 'Off'}
+                selected={notifyPrefs[type]}
+                role="checkbox"
+                accessibilityLabel={NOTIFICATION_LABELS[type]}
+                onPress={() => handleToggleNotification(type)}
+              />
+            </ThemedView>
+          ))}
+
+          {notifyError ? (
+            <ThemedText type="small" style={styles.formError}>
+              {notifyError}
+            </ThemedText>
+          ) : null}
+
+          <ThemedText type="small" themeColor="textSecondary">
+            VOUCH sends at most 2 non-essential notifications a week — that&apos;s enforced on our
+            servers, not just here.
+          </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.block}>
@@ -209,6 +271,16 @@ const styles = StyleSheet.create({
   },
   row: {
     gap: Spacing.half,
+  },
+  notifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    minHeight: 44,
+  },
+  notifyLabel: {
+    flex: 1,
   },
   formError: {
     color: '#B3261E',

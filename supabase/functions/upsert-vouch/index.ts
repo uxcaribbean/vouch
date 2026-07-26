@@ -21,9 +21,11 @@
  *   g. the anti-gaming gate (contact hash | invite token | prior contact ≥7d)
  *   h. the <24h/5-vouch rate limit, create only
  *   i. vouch_created event, create only
+ *   j. vouch_received push to the trader (M8), create only
  */
 import { z } from "zod";
 import { json, preflight } from "../_shared/http.ts";
+import { sendNotification } from "../_shared/notify.ts";
 import { getAuthUser, serviceClient } from "../_shared/supabase.ts";
 
 const MAX_COMMENT_LENGTH = 400;
@@ -240,6 +242,27 @@ Deno.serve(async (req) => {
     name: "vouch_created",
     props: { trader_id, trade_id, source },
   });
+
+  // -- j: tell the trader (M8). Creation only — an edit or a republish is
+  // not news. Never allowed to fail the vouch that just succeeded.
+  try {
+    const [{ data: voucher }, { data: trade }] = await Promise.all([
+      db.from("users").select("display_name").eq("id", caller.id).maybeSingle(),
+      db.from("trades").select("name").eq("id", trade_id).maybeSingle(),
+    ]);
+    await sendNotification(db, {
+      userId: trader.user_id,
+      type: "vouch_received",
+      title: "You got a new vouch ⭐",
+      body: `${voucher?.display_name ?? "Someone"} vouched for your ${
+        trade?.name ?? "trade"
+      } work.`,
+      data: { trader_id, trade_id },
+      transactional: true,
+    });
+  } catch (notifyError) {
+    console.error("vouch_received notification failed", notifyError);
+  }
 
   return json({ vouch: created, created: true }, 201);
 });
