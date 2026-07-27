@@ -16,7 +16,7 @@ import { buildJoinMessage, createInvite, inviteErrorCopy } from '@/lib/invites';
  * (spec M6.4 — the app never messages anyone). Web's share sheet is flaky,
  * so there we render the message for the user to copy instead.
  */
-export function InviteAFriend() {
+export function InviteAFriend({ label = 'Invite a friend' }: { label?: string }) {
   const { session, profile } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export function InviteAFriend() {
 
   return (
     <ThemedView style={styles.wrap}>
-      <Button label="Invite a friend" variant="soft" loading={busy} onPress={handleInvite} />
+      <Button label={label} variant="soft" loading={busy} onPress={handleInvite} />
       {error ? (
         <ThemedText type="small" style={styles.error}>
           {error}

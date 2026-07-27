@@ -260,7 +260,18 @@ export default function SearchScreen() {
               No {selectedTradeName ?? 'traders'} vouched in {region.name} yet — be the first to invite
               one.
             </ThemedText>
-            <InviteAFriend />
+            {session && profile ? (
+              // Join-invite share (spec M3.6 empty state + M6.2 copy).
+              <InviteAFriend label="Invite a trader" />
+            ) : (
+              // Search works logged out (spec M3) — the CTA routes into
+              // sign-in/setup instead of calling create-invite sessionless.
+              <Button
+                label="Invite a trader"
+                variant="soft"
+                onPress={() => router.push(session ? '/profile-setup' : '/sign-in')}
+              />
+            )}
           </ThemedView>
         ) : null}
 
