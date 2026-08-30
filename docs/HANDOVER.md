@@ -1,6 +1,6 @@
 # VOUCH — Handover / project state
 
-_Last updated: 2026-07-12. Everything a new person (or a new AI session on a
+_Last updated: 2026-08-30. Everything a new person (or a new AI session on a
 different account) needs to continue this build with only this folder._
 
 The authoritative requirements are [VOUCH-BUILD-SPEC.md](VOUCH-BUILD-SPEC.md).
@@ -23,7 +23,7 @@ the way, and where the landmines are. Repo conventions live in
 | M8 Notifications | ✅ | `M8` | `test-m8.mjs` (18 checks) |
 | M9 Trust/safety/admin | ✅ | `M9` | `test-m9.mjs` (30 checks) + reviewer browser run |
 | M11 Analytics | ✅ | `M11` | `test-m11.mjs` (10 checks, recomputes from raw events) |
-| M10 Billing | **last** | — | blocked on founder decisions (spec §7) |
+| M10 Billing | ◐ lifecycle ✅ | `M10` | `test-m10.mjs` (26 checks); provider integration pending founders |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -256,8 +256,26 @@ Ops notes: parallel executors share the one local DB and acceptance runs
 RESET it — serialize resets; port 3000 may be held by unrelated projects
 (use the `web-3100` launch entry).
 
-**Remaining:** M10 billing only (spec: design now, integrate later; blocked
-on founder decisions — provider [WiPay recommended], TTD price, domain).
+**M10 lifecycle — shipped 2026-08-30** (Sonnet 5 executor). The
+provider-independent state machine: run-billing-lifecycle (cron-guarded
+like run-nudges) lapses expired free periods, warns at T-30/7/1 (new
+'billing' notification type — transactional/uncapped but toggleable;
+warnings dedupe on threshold+for_date so a referral moving free_until
+re-arms them), and reactivates lapsed traders whose access returns
+(admin credits now un-lapse on the next run — closed an M9-era loop).
+subscriptions table is provider-agnostic (wipay/powertranz/stripe/manual);
+access = free_until >= today OR a subscription with status in
+(active, cancelled) and current_period_end in the future — cancelled
+honors the paid period. Hidden/suspended traders are never touched.
+
+**Remaining CODE (when founders decide provider/price/domain):** the web
+checkout page on the trader's account (Netflix model per spec — NOT iOS
+IAP) and the provider webhook edge function: verify signature → upsert
+subscriptions on (provider, provider_ref) → run the reactivation logic
+inline (idempotent under webhook retries — the unique key makes replays
+safe; the acceptance suite already drives the full state machine the
+webhook merely feeds). Wire a daily scheduler for run-billing-lifecycle
+AND run-nudges on the hosted project + set real CRON_SECRET.
 Plus the standing device-pass list: real OTP, contacts read, wa.me loop,
 EAS projectId + real push triggers.
 

@@ -95,18 +95,29 @@ Deno.serve(async (req) => {
       ]);
 
       let receivedCount = 0;
+      let subscription: { provider: string; status: string; current_period_end: string } | null = null;
       if (trader?.id) {
-        const { count } = await db
-          .from("vouches")
-          .select("id", { count: "exact", head: true })
-          .eq("trader_id", trader.id)
-          .eq("status", "published");
+        const [{ count }, { data: sub }] = await Promise.all([
+          db
+            .from("vouches")
+            .select("id", { count: "exact", head: true })
+            .eq("trader_id", trader.id)
+            .eq("status", "published"),
+          db
+            .from("subscriptions")
+            .select("provider, status, current_period_end")
+            .eq("user_id", u.id)
+            .order("current_period_end", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
         receivedCount = count ?? 0;
+        subscription = sub ?? null;
       }
 
       return {
         user: u,
-        trader: trader ?? null,
+        trader: trader ? { ...trader, subscription } : null,
         counts: {
           vouches_given: given.count ?? 0,
           vouches_received: receivedCount,

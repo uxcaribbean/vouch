@@ -25,6 +25,7 @@ node scripts/acceptance/test-m7.mjs
 node scripts/acceptance/test-m8.mjs
 node scripts/acceptance/test-m9.mjs
 node scripts/acceptance/test-m11.mjs
+node scripts/acceptance/test-m10.mjs
 
 echo
 echo "All acceptance suites passed."

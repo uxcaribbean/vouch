@@ -23,7 +23,8 @@ export type NotificationType =
   | "vouch_received"
   | "referral_credited"
   | "contacts_joined_traders"
-  | "sync_nudge";
+  | "sync_nudge"
+  | "billing";
 
 export type NotificationStatus =
   | "sent"
@@ -41,6 +42,7 @@ const CAP_WINDOW_DAYS = 7;
 const TRANSACTIONAL_TYPES: NotificationType[] = [
   "vouch_received",
   "referral_credited",
+  "billing",
 ];
 
 export interface SendNotificationArgs {

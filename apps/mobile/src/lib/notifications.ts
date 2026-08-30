@@ -30,12 +30,13 @@ import { supabase } from '@/lib/supabase';
  */
 const loadPushModule = () => import('expo-notifications');
 
-/** The four toggleable types, matching the DB check constraint (M8 migration). */
+/** The five toggleable types, matching the DB check constraint (M8 + M10 migrations). */
 export const NOTIFICATION_TYPES = [
   'vouch_received',
   'referral_credited',
   'contacts_joined_traders',
   'sync_nudge',
+  'billing',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -46,6 +47,7 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   referral_credited: 'Referral credited',
   contacts_joined_traders: 'People you know joined',
   sync_nudge: 'Sync reminders',
+  billing: 'Billing reminders',
 };
 
 /** An ABSENT `notification_prefs` row means enabled — new types default on. */
@@ -56,6 +58,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   referral_credited: true,
   contacts_joined_traders: true,
   sync_nudge: true,
+  billing: true,
 };
 
 let warnedAboutToken = false;

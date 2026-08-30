@@ -25,7 +25,7 @@ for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
 | M8 Notifications & nudges | ✅ built (18-check suite; caps/toggles server-enforced via notification_log) |
 | M9 Trust, safety & admin | ✅ built (30-check suite; audited admin actions, /admin dashboard) |
 | M11 Analytics & metrics | ✅ built (10-check suite; north-star dashboard at /admin/metrics) |
-| M10 Subscriptions & billing | last per spec — blocked on founder decisions (provider, TTD price, domain) |
+| M10 Subscriptions & billing | ◐ lifecycle built (26-check suite: lapse/warn/reactivate + subscriptions table); provider checkout/webhook awaits founder decisions |
 
 ## Layout
 

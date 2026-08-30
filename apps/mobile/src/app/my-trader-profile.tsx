@@ -22,10 +22,37 @@ function formatFreeUntil(dateStr: string): string {
   return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function statusLine(profile: TraderProfileWithJoins): string {
-  if (profile.status === 'active') return `Free until ${formatFreeUntil(profile.free_until)}`;
-  if (profile.status === 'lapsed') return 'Your listing is inactive — free period ended';
-  return 'Your listing is hidden. Contact support.';
+/**
+ * Whole days from today (UTC) to an ISO `YYYY-MM-DD` date. Deliberately
+ * built from `Date.UTC` components rather than `setMonth`/local-time math —
+ * see the M9 TZ lesson in HANDOVER.md: local-time date math drifts a day
+ * around DST, and this is a spec§7-adjacent billing countdown that has to
+ * agree with the server's UTC day boundary.
+ */
+function daysUntil(dateStr: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const target = Date.UTC(year, month - 1, day);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((target - today) / 86_400_000);
+}
+
+type StatusLine = { text: string; color?: string };
+
+function statusLine(profile: TraderProfileWithJoins): StatusLine {
+  if (profile.status === 'active') {
+    const daysLeft = daysUntil(profile.free_until);
+    if (daysLeft >= 0 && daysLeft <= 30) {
+      const plural = daysLeft === 1 ? '' : 's';
+      return {
+        text: `Your free period ends in ${daysLeft} day${plural} — ${formatFreeUntil(profile.free_until)}. Billing options are coming soon.`,
+        color: daysLeft <= 7 ? '#B3261E' : undefined,
+      };
+    }
+    return { text: `Free until ${formatFreeUntil(profile.free_until)}` };
+  }
+  if (profile.status === 'lapsed') return { text: 'Your listing is inactive — free period ended' };
+  return { text: 'Your listing is hidden. Contact support.' };
 }
 
 export default function MyTraderProfileScreen() {
@@ -85,6 +112,7 @@ export default function MyTraderProfileScreen() {
   }
 
   const displayName = traderProfile.business_name || userProfile?.display_name || 'Your listing';
+  const status = statusLine(traderProfile);
 
   return (
     <ThemedView style={styles.container}>
@@ -99,7 +127,9 @@ export default function MyTraderProfileScreen() {
           )}
           <ThemedView style={styles.headerText}>
             <ThemedText type="subtitle">{displayName}</ThemedText>
-            <ThemedText themeColor="textSecondary">{statusLine(traderProfile)}</ThemedText>
+            <ThemedText themeColor="textSecondary" style={status.color ? { color: status.color } : undefined}>
+              {status.text}
+            </ThemedText>
             {vouchCount !== null ? (
               <ThemedText themeColor="textSecondary">{vouchCount} vouches received</ThemedText>
             ) : null}
