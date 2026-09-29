@@ -26,6 +26,7 @@ for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
 | M9 Trust, safety & admin | ✅ built (30-check suite; audited admin actions, /admin dashboard) |
 | M11 Analytics & metrics | ✅ built (10-check suite; north-star dashboard at /admin/metrics) |
 | M10 Subscriptions & billing | ◐ lifecycle built (26-check suite: lapse/warn/reactivate + subscriptions table); provider checkout/webhook awaits founder decisions |
+| M12 Plain-language understanding | ✅ built (TypeSafe: search by need, vouch-comment guard, new-service matching; 36-check suite) |
 
 ## Layout
 

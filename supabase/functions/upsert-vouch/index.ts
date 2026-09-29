@@ -22,16 +22,37 @@
  *   h. the <24h/5-vouch rate limit, create only
  *   i. vouch_created event, create only
  *   j. vouch_received push to the trader (M8), create only
+ *
+ * M12 comment guard: right before each WRITE (create, edit, republish) —
+ * i.e. after the gate/lock/rate-limit logic has decided the write may
+ * happen — a non-empty comment is scored by the model
+ * (packages/shared/src/understanding.ts owns the questions and thresholds):
+ *   - clear complaint / advertising someone else -> 400 comment_not_positive
+ *     | comment_promotes_other, nothing written, existing row untouched
+ *   - borderline -> published, plus a system flag for an admin to look at
+ *   - model unavailable -> published unchecked (fail-open: an outage must
+ *     never stop a real vouch)
+ * The result is recorded in vouch_checks (admins-only), never on the public
+ * vouches row. Success responses carry a top-level comment_check.
  */
 import { z } from "zod";
 import { json, preflight } from "../_shared/http.ts";
 import { sendNotification } from "../_shared/notify.ts";
 import { getAuthUser, serviceClient } from "../_shared/supabase.ts";
+import { askJev } from "../_shared/typesafe.ts";
+import {
+  COMMENT_QUESTIONS,
+  type CommentScores,
+  type CommentVerdict,
+  commentState,
+  commentVerdict,
+} from "../../../packages/shared/src/understanding.ts";
 
 const MAX_COMMENT_LENGTH = 400;
 const GATE_PRIOR_CONTACT_DAYS = 7;
 const NEW_ACCOUNT_HOURS = 24;
 const NEW_ACCOUNT_VOUCH_CAP = 5;
+const COMMENT_GUARD_TIMEOUT_MS = 3000;
 
 const BodySchema = z.object({
   trader_id: z.string().uuid(),
@@ -50,6 +71,107 @@ const BodySchema = z.object({
   // client, not a new channel, so zod rejects it as invalid_input.
   source: z.enum(["app", "weblink"]).default("app"),
 });
+
+type CommentGuard = {
+  verdict: CommentVerdict;
+  scores: CommentScores | null;
+  model: string | null;
+};
+
+type Db = ReturnType<typeof serviceClient>;
+
+/** The top-level comment_check on success responses: null with no comment. */
+function commentCheckOf(guard: CommentGuard | null) {
+  return guard && guard.verdict.action === "publish"
+    ? guard.verdict.check
+    : null;
+}
+
+/** Scores a non-empty comment. Null scores = model unavailable (fail-open). */
+async function guardComment(
+  db: Db,
+  trade_id: number,
+  comment: string,
+): Promise<CommentGuard> {
+  const { data: trade } = await db
+    .from("trades")
+    .select("name")
+    .eq("id", trade_id)
+    .maybeSingle();
+  const answer = await askJev(
+    commentState(trade?.name ?? "trade", comment),
+    COMMENT_QUESTIONS,
+    { timeoutMs: COMMENT_GUARD_TIMEOUT_MS },
+  );
+  const scores: CommentScores | null = answer
+    ? {
+      praise: answer.answers.praise.noul!,
+      complaint: answer.answers.complaint.noul!,
+      promotes_other: answer.answers.promotes_other.noul!,
+    }
+    : null;
+  return {
+    verdict: commentVerdict(scores),
+    scores,
+    model: answer?.model ?? null,
+  };
+}
+
+/**
+ * After a successful write: keep vouch_checks in step with the comment, and
+ * queue a system flag when the check came back borderline. Never allowed to
+ * fail the vouch that just succeeded.
+ */
+async function recordCommentCheck(
+  db: Db,
+  vouchId: string,
+  guard: CommentGuard | null,
+) {
+  try {
+    if (!guard) {
+      // no comment (any more) -> no moderation record either
+      await db.from("vouch_checks").delete().eq("vouch_id", vouchId);
+      return;
+    }
+    const { verdict, scores, model } = guard;
+    if (verdict.action !== "publish") return; // rejects never reach a write
+    const { error } = await db.from("vouch_checks").upsert({
+      vouch_id: vouchId,
+      check: verdict.check,
+      scores: verdict.check === "unchecked" ? null : scores,
+      model: verdict.check === "unchecked" ? null : model,
+      checked_at: new Date().toISOString(),
+    });
+    if (error) console.error("vouch_checks upsert failed", error.message);
+
+    if (verdict.check === "flagged" && scores) {
+      const { data: openFlag } = await db
+        .from("flags")
+        .select("id")
+        .eq("source", "system")
+        .eq("subject_type", "vouch")
+        .eq("subject_id", vouchId)
+        .eq("status", "open")
+        .limit(1)
+        .maybeSingle();
+      if (!openFlag) {
+        const { error: flagError } = await db.from("flags").insert({
+          source: "system",
+          reporter_user_id: null,
+          subject_type: "vouch",
+          subject_id: vouchId,
+          reason: "other",
+          detail: `Automatic check: ${verdict.reason} (complaint ${
+            scores.complaint.toFixed(2)
+          }, advertising ${scores.promotes_other.toFixed(2)})`,
+        });
+        if (flagError) console.error("system flag insert failed", flagError.message);
+      }
+    }
+  } catch (e) {
+    console.error("comment check record failed", (e as Error)?.name);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -115,6 +237,19 @@ Deno.serve(async (req) => {
     .eq("id", trader.user_id)
     .maybeSingle();
 
+  /** Refuse a comment the model is sure is not a vouch. Logs the reason only,
+   * never the text (it may be a private grievance or someone's number). */
+  async function rejectComment(
+    code: "comment_not_positive" | "comment_promotes_other",
+  ): Promise<Response> {
+    await db.from("events").insert({
+      user_id: caller!.id,
+      name: "vouch_comment_blocked",
+      props: { reason: code, trader_id, trade_id },
+    });
+    return json({ error: code }, 400);
+  }
+
   async function gatePasses(): Promise<boolean> {
     // (1) contact-hash: voucher already has the trader's number saved.
     if (traderOwner?.phone_hash) {
@@ -175,6 +310,10 @@ Deno.serve(async (req) => {
 
   if (existing?.status === "published") {
     // pure comment edit — no gate, no rate limit.
+    const guard = comment ? await guardComment(db, trade_id, comment) : null;
+    if (guard?.verdict.action === "reject") {
+      return await rejectComment(guard.verdict.code);
+    }
     const { data: updated, error } = await db
       .from("vouches")
       .update({ comment })
@@ -185,13 +324,21 @@ Deno.serve(async (req) => {
       console.error("vouch edit failed", error);
       return json({ error: "update_failed" }, 500);
     }
-    return json({ vouch: updated, created: false }, 200);
+    await recordCommentCheck(db, updated.id, guard);
+    return json(
+      { vouch: updated, created: false, comment_check: commentCheckOf(guard) },
+      200,
+    );
   }
 
   if (existing?.status === "removed_by_user") {
     // republish — gated, but never rate-limited.
     if (!(await gatePasses())) {
       return json({ error: "gate_not_met" }, 403);
+    }
+    const guard = comment ? await guardComment(db, trade_id, comment) : null;
+    if (guard?.verdict.action === "reject") {
+      return await rejectComment(guard.verdict.code);
     }
     const { data: updated, error } = await db
       .from("vouches")
@@ -203,7 +350,11 @@ Deno.serve(async (req) => {
       console.error("vouch republish failed", error);
       return json({ error: "update_failed" }, 500);
     }
-    return json({ vouch: updated, created: false }, 200);
+    await recordCommentCheck(db, updated.id, guard);
+    return json(
+      { vouch: updated, created: false, comment_check: commentCheckOf(guard) },
+      200,
+    );
   }
 
   // -- no existing row: create, behind gate AND rate limit ---------------------
@@ -220,6 +371,11 @@ Deno.serve(async (req) => {
     if ((count ?? 0) >= NEW_ACCOUNT_VOUCH_CAP) {
       return json({ error: "rate_limited" }, 429);
     }
+  }
+
+  const guard = comment ? await guardComment(db, trade_id, comment) : null;
+  if (guard?.verdict.action === "reject") {
+    return await rejectComment(guard.verdict.code);
   }
 
   const { data: created, error } = await db
@@ -246,6 +402,8 @@ Deno.serve(async (req) => {
     props: { trader_id, trade_id, source },
   });
 
+  if (guard) await recordCommentCheck(db, created.id, guard);
+
   // -- j: tell the trader (M8). Creation only — an edit or a republish is
   // not news. Never allowed to fail the vouch that just succeeded.
   try {
@@ -267,5 +425,8 @@ Deno.serve(async (req) => {
     console.error("vouch_received notification failed", notifyError);
   }
 
-  return json({ vouch: created, created: true }, 201);
+  return json(
+    { vouch: created, created: true, comment_check: commentCheckOf(guard) },
+    201,
+  );
 });

@@ -202,9 +202,10 @@ export type Database = {
           detail: string | null
           id: string
           reason: string
-          reporter_user_id: string
+          reporter_user_id: string | null
           resolution_note: string | null
           resolved_by: string | null
+          source: string
           status: string
           subject_id: string
           subject_type: string
@@ -215,9 +216,10 @@ export type Database = {
           detail?: string | null
           id?: string
           reason: string
-          reporter_user_id: string
+          reporter_user_id?: string | null
           resolution_note?: string | null
           resolved_by?: string | null
+          source?: string
           status?: string
           subject_id: string
           subject_type: string
@@ -228,9 +230,10 @@ export type Database = {
           detail?: string | null
           id?: string
           reason?: string
-          reporter_user_id?: string
+          reporter_user_id?: string | null
           resolution_note?: string | null
           resolved_by?: string | null
+          source?: string
           status?: string
           subject_id?: string
           subject_type?: string
@@ -874,6 +877,38 @@ export type Database = {
             columns: ["referred_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vouch_checks: {
+        Row: {
+          check: string
+          checked_at: string
+          model: string | null
+          scores: Json | null
+          vouch_id: string
+        }
+        Insert: {
+          check: string
+          checked_at?: string
+          model?: string | null
+          scores?: Json | null
+          vouch_id: string
+        }
+        Update: {
+          check?: string
+          checked_at?: string
+          model?: string | null
+          scores?: Json | null
+          vouch_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vouch_checks_vouch_id_fkey"
+            columns: ["vouch_id"]
+            isOneToOne: true
+            referencedRelation: "vouches"
             referencedColumns: ["id"]
           },
         ]

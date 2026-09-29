@@ -1,7 +1,7 @@
 import type { Database, Tables } from '@vouch/shared';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { InviteAFriend } from '@/components/invite-a-friend';
@@ -15,7 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { trackEvent } from '@/lib/analytics';
 import { useAuth } from '@/lib/auth';
 import { ALL_TRINIDAD_REGION, useSelectedRegion } from '@/lib/region-state';
-import { supabase } from '@/lib/supabase';
+import { invokeFunction, supabase } from '@/lib/supabase';
 import { regionNamesSummary } from '@/lib/trader-profile';
 
 type TradeOption = Pick<Tables<'trades'>, 'id' | 'name' | 'slug' | 'category' | 'keywords' | 'status'>;
@@ -23,6 +23,35 @@ type SearchRow = Database['public']['Functions']['search_traders']['Returns'][nu
 type RegionOption = { id: number; name: string };
 
 type ResolvedResults = { key: string } & ({ status: 'ready'; rows: SearchRow[] } | { status: 'error' });
+
+// M12 — plain-language search. Response shape of the `interpret-need` edge
+// function (see scripts/acceptance/test-m12.mjs for the live contract).
+type NeedTrade = { id: number; slug: string; name: string; probability: number };
+type NeedResponse = {
+  outcome: 'confident' | 'ambiguous' | 'no_match' | 'unavailable';
+  /** 'exact' = the text was already a trade name — no caption needed. */
+  source?: 'exact' | 'model' | 'fallback';
+  trades: NeedTrade[];
+};
+/** One submitted need. Identity (not text) is the key: re-submitting the same
+ * text is a fresh request, and dropping it (edit/select) discards late answers. */
+type NeedRequest = { text: string };
+type NeedAnswer = { request: NeedRequest; outcome: 'ambiguous' | 'no_match'; trades: NeedTrade[] };
+type NeedCaption = { text: string; tradeId: number; tradeName: string };
+
+/** Never throws: null means "use the local typeahead" (the designed fallback
+ * for `unavailable`, network errors and bad payloads alike). */
+async function interpretNeed(text: string): Promise<NeedResponse | null> {
+  try {
+    const { data, errorCode } = await invokeFunction<NeedResponse>('interpret-need', {
+      need: text.slice(0, 200),
+    });
+    if (errorCode || !data || !Array.isArray(data.trades)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -45,6 +74,15 @@ export default function SearchScreen() {
   const [friendsOnly, setFriendsOnly] = useState(false);
   const canFilterFriends = Boolean(session && profile?.contact_sync_enabled);
   const [retryTick, setRetryTick] = useState(0);
+  // Search-by-need: on submit (or arrival with ?q=) the text goes to
+  // `interpret-need` once. Like `resolved` below, "loading" is derived by
+  // comparing the answer's request to the current one — no separate flag.
+  const [needRequest, setNeedRequest] = useState<NeedRequest | null>(() => {
+    const initial = params.q?.trim() ?? '';
+    return initial.length >= 2 && !params.trade ? { text: initial } : null;
+  });
+  const [needAnswer, setNeedAnswer] = useState<NeedAnswer | null>(null);
+  const [needCaption, setNeedCaption] = useState<NeedCaption | null>(null);
   // `resolved` only ever changes inside the effect's async continuation
   // (never synchronously in the effect body) — "loading" is derived below by
   // comparing `resolved.key` to the current `requestKey`, so there is no
@@ -113,23 +151,79 @@ export default function SearchScreen() {
     };
   }, [requestKey, selectedTradeId, region.id, friendsFilterActive]);
 
-  function selectTrade(trade: Pick<TradeOption, 'id' | 'name'>) {
+  // Setters only, so the identity is stable and the need effect can depend on it.
+  const selectTrade = useCallback((trade: Pick<TradeOption, 'id' | 'name'>, fromNeedText?: string) => {
     setSelectedTradeId(trade.id);
     setSearchAll(false);
     setQuery('');
+    setNeedRequest(null);
+    setNeedCaption(fromNeedText ? { text: fromNeedText, tradeId: trade.id, tradeName: trade.name } : null);
+  }, []);
+
+  useEffect(() => {
+    if (!needRequest) return;
+    // Cleanup runs when the request is replaced or dropped (text edited, a
+    // trade picked, "Search all services") — a late answer is then ignored.
+    let cancelled = false;
+    void interpretNeed(needRequest.text).then((answer) => {
+      if (cancelled) return;
+      if (!answer || answer.outcome === 'unavailable') {
+        setNeedRequest(null);
+        return;
+      }
+      if (answer.outcome === 'confident') {
+        const top = answer.trades[0];
+        if (top) selectTrade(top, answer.source === 'exact' ? undefined : needRequest.text);
+        else setNeedRequest(null);
+        return;
+      }
+      if (answer.outcome === 'ambiguous' && answer.trades.length === 0) {
+        setNeedRequest(null);
+        return;
+      }
+      setNeedAnswer({ request: needRequest, outcome: answer.outcome, trades: answer.trades });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [needRequest, selectTrade]);
+
+  function submitNeed() {
+    const text = query.trim();
+    if (text.length < 2) return;
+    setNeedRequest({ text });
+  }
+
+  function changeQuery(next: string) {
+    setQuery(next);
+    setNeedRequest(null);
   }
 
   function clearSelection() {
+    // Put the sentence back so the person can rephrase rather than retype.
+    if (needCaption && needCaption.tradeId === selectedTradeId) setQuery(needCaption.text);
     setSelectedTradeId(null);
     setSearchAll(false);
+    setNeedCaption(null);
+  }
+
+  function searchEverything() {
+    setSearchAll(true);
+    setNeedRequest(null);
+    setNeedCaption(null);
   }
 
   function pickRegion(next: RegionOption) {
     setRegion(next.id === ALL_TRINIDAD_REGION.id ? ALL_TRINIDAD_REGION : next);
   }
 
+  const activeCaption = needCaption && needCaption.tradeId === selectedTradeId ? needCaption : null;
   const selectedTradeName =
-    selectedTradeId != null ? (trades.find((t) => t.id === selectedTradeId)?.name ?? 'Selected service') : null;
+    selectedTradeId != null
+      ? (trades.find((t) => t.id === selectedTradeId)?.name ?? activeCaption?.tradeName ?? 'Selected service')
+      : null;
+  const needLoading = needRequest != null && needAnswer?.request !== needRequest;
+  const activeAnswer = needRequest != null && needAnswer?.request === needRequest ? needAnswer : null;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredResults =
     normalizedQuery.length > 0
@@ -141,6 +235,19 @@ export default function SearchScreen() {
   const showPicker = selectedTradeId == null && !searchAll;
   const isCurrent = requestKey != null && resolved?.key === requestKey;
   const isLoading = requestKey != null && !isCurrent;
+
+  const categorySection = params.category ? (
+    <ThemedView style={styles.chipSection}>
+      <ThemedText type="smallBold" themeColor="textSecondary">
+        {params.category}
+      </ThemedText>
+      <ThemedView style={styles.chipList}>
+        {categoryTrades.map((trade) => (
+          <ToggleChip key={trade.id} label={trade.name} selected={false} onPress={() => selectTrade(trade)} />
+        ))}
+      </ThemedView>
+    </ThemedView>
+  ) : null;
 
   return (
     <ThemedView style={styles.container}>
@@ -182,13 +289,61 @@ export default function SearchScreen() {
             <TextField
               placeholder="What do you need? e.g. plumber"
               value={query}
-              onChangeText={setQuery}
+              onChangeText={changeQuery}
+              onSubmitEditing={submitNeed}
+              returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus={!params.category}
             />
 
-            {normalizedQuery.length > 0 ? (
+            {needLoading ? (
+              <ThemedView style={styles.findingRow} accessibilityLiveRegion="polite">
+                <ActivityIndicator />
+                <ThemedText type="small" themeColor="textSecondary">
+                  Finding the right trade…
+                </ThemedText>
+              </ThemedView>
+            ) : activeAnswer?.outcome === 'ambiguous' ? (
+              <ThemedView style={styles.chipSection}>
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  Did you mean…
+                </ThemedText>
+                <ThemedView style={styles.chipList}>
+                  {activeAnswer.trades.map((trade) => (
+                    <ToggleChip
+                      key={trade.id}
+                      label={trade.name}
+                      selected={false}
+                      onPress={() => selectTrade(trade)}
+                    />
+                  ))}
+                </ThemedView>
+              </ThemedView>
+            ) : activeAnswer?.outcome === 'no_match' ? (
+              <>
+                <ThemedView style={styles.chipSection}>
+                  <ThemedText themeColor="textSecondary">
+                    {`VOUCH doesn't list a service for “${activeAnswer.request.text}” yet.`}
+                  </ThemedText>
+                  {activeAnswer.trades[0] ? (
+                    <>
+                      <ThemedText type="smallBold" themeColor="textSecondary">
+                        Closest match:
+                      </ThemedText>
+                      <ThemedView style={styles.chipList}>
+                        <ToggleChip
+                          label={activeAnswer.trades[0].name}
+                          selected={false}
+                          onPress={() => selectTrade(activeAnswer.trades[0])}
+                        />
+                      </ThemedView>
+                    </>
+                  ) : null}
+                </ThemedView>
+                {categorySection}
+              </>
+            ) : normalizedQuery.length > 0 ? (
               <ThemedView style={styles.resultsList}>
                 {filteredResults.map((trade) => (
                   <Pressable
@@ -205,25 +360,11 @@ export default function SearchScreen() {
                   </ThemedText>
                 ) : null}
               </ThemedView>
-            ) : params.category ? (
-              <ThemedView style={styles.chipSection}>
-                <ThemedText type="smallBold" themeColor="textSecondary">
-                  {params.category}
-                </ThemedText>
-                <ThemedView style={styles.chipList}>
-                  {categoryTrades.map((trade) => (
-                    <ToggleChip
-                      key={trade.id}
-                      label={trade.name}
-                      selected={false}
-                      onPress={() => selectTrade(trade)}
-                    />
-                  ))}
-                </ThemedView>
-              </ThemedView>
-            ) : null}
+            ) : (
+              categorySection
+            )}
 
-            <Button label="Search all services" variant="soft" onPress={() => setSearchAll(true)} />
+            <Button label="Search all services" variant="soft" onPress={searchEverything} />
           </ThemedView>
         ) : (
           <ThemedView style={styles.selectedRow}>
@@ -238,6 +379,17 @@ export default function SearchScreen() {
             </Pressable>
           </ThemedView>
         )}
+
+        {!showPicker && activeCaption ? (
+          <ThemedView style={styles.captionBlock}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {`Showing ${activeCaption.tradeName} for “${activeCaption.text}”`}
+            </ThemedText>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={clearSelection} style={styles.captionLink}>
+              <ThemedText type="linkPrimary">Not right? Choose another</ThemedText>
+            </Pressable>
+          </ThemedView>
+        ) : null}
 
         {!showPicker && isLoading ? (
           <ThemedView style={styles.loadingWrap}>
@@ -404,6 +556,19 @@ const styles = StyleSheet.create({
   loadingWrap: {
     paddingVertical: Spacing.five,
     alignItems: 'center',
+  },
+  findingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  captionBlock: {
+    gap: Spacing.one,
+  },
+  captionLink: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   formError: {
     color: '#B3261E',

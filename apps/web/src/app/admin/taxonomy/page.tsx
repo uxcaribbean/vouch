@@ -15,7 +15,7 @@
  * every trader_trades and vouches row and drops the ones that would
  * collide.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { optionalNote, runAdminAction } from "../actions";
 import {
   BUTTON,
@@ -27,13 +27,16 @@ import {
   FIELD,
   GHOST,
   HELPER,
+  SOFT,
   SectionHeading,
   formatDate,
 } from "../ui";
-import { supabase } from "@/lib/supabase";
+import { invokeFunction, supabase } from "@/lib/supabase";
 
 const MERGED_LIMIT = 10;
 const MAX_TARGET_OPTIONS = 40;
+/** How many proposals get an automatic "does this already exist?" check. */
+const MAX_SUGGESTIONS = 20;
 
 type Trade = {
   id: number;
@@ -45,10 +48,50 @@ type Trade = {
   merged_into_id: number | null;
 };
 
+type TradeRef = { id: number; slug: string; name: string; probability: number };
+
+/** suggest-trade's answer (see supabase/functions/suggest-trade). */
+type SuggestResponse = {
+  outcome: "existing" | "new" | "unavailable";
+  source: string;
+  trade: TradeRef | null;
+  closest: TradeRef | null;
+};
+
+/**
+ * What the row shows once the check comes back. A missing entry means the
+ * check is still pending; "quiet" (unavailable, error, nothing close) shows
+ * nothing at all — the admin curates exactly as before.
+ */
+type Suggestion =
+  | { kind: "existing"; trade: TradeRef }
+  | { kind: "closest"; trade: TradeRef }
+  | { kind: "quiet" };
+
+const percent = (probability: number) => Math.round(probability * 100);
+
+function toSuggestion(answer: SuggestResponse | null): Suggestion {
+  if (!answer) return { kind: "quiet" };
+  if (answer.outcome === "existing" && answer.trade) {
+    return { kind: "existing", trade: answer.trade };
+  }
+  if (answer.outcome === "new" && answer.closest) {
+    return { kind: "closest", trade: answer.closest };
+  }
+  return { kind: "quiet" };
+}
+
 export default function TaxonomyPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [mergingId, setMergingId] = useState<number | null>(null);
+  // Lifted out of MergePanel so "Use as merge target" can pre-select a trade
+  // whether or not that row's picker is already open.
+  const [mergeTarget, setMergeTarget] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<Record<number, Suggestion>>({});
+  // Proposals already sent for checking — a reload after approve/merge must
+  // not re-ask (and re-bill) the model for the rows that are still here.
+  const requested = useRef<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,6 +126,29 @@ export default function TaxonomyPage() {
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .slice(0, MERGED_LIMIT),
     [trades],
+  );
+  // Ask suggest-trade about each proposal (oldest first, capped), all in
+  // parallel. No cancellation: results are keyed by trade id, so a late answer
+  // for a row that has since gone is simply never rendered.
+  useEffect(() => {
+    const todo = proposed
+      .slice(0, MAX_SUGGESTIONS)
+      .filter((trade) => !requested.current.has(trade.id));
+    for (const trade of todo) requested.current.add(trade.id);
+    for (const trade of todo) {
+      void invokeFunction<SuggestResponse>("suggest-trade", {
+        service: trade.name,
+      })
+        .then(({ data }) => toSuggestion(data))
+        .catch((): Suggestion => ({ kind: "quiet" }))
+        .then((suggestion) =>
+          setSuggestions((current) => ({ ...current, [trade.id]: suggestion })),
+        );
+    }
+  }, [proposed]);
+  const checking = useMemo(
+    () => new Set(proposed.slice(0, MAX_SUGGESTIONS).map((t) => t.id)),
+    [proposed],
   );
   const nameById = useMemo(
     () => Object.fromEntries(trades.map((t) => [t.id, t.name])),
@@ -119,6 +185,7 @@ export default function TaxonomyPage() {
       return;
     }
     setMergingId(null);
+    setMergeTarget(null);
     await load();
   }
 
@@ -147,14 +214,28 @@ export default function TaxonomyPage() {
                 </div>
                 <p className={`${HELPER} font-mono`}>{trade.slug}</p>
 
+                <SuggestionLine
+                  suggestion={suggestions[trade.id]}
+                  checking={checking.has(trade.id)}
+                  disabled={busy}
+                  onUse={(targetId) => {
+                    setMergingId(trade.id);
+                    setMergeTarget(targetId);
+                    setError(null);
+                  }}
+                />
+
                 {mergingId === trade.id ? (
                   <MergePanel
                     from={trade}
                     options={active}
+                    target={mergeTarget}
+                    onTarget={setMergeTarget}
                     busy={busy}
                     error={error}
                     onCancel={() => {
                       setMergingId(null);
+                      setMergeTarget(null);
                       setError(null);
                     }}
                     onMerge={(intoId, note) => void merge(trade, intoId, note)}
@@ -176,6 +257,7 @@ export default function TaxonomyPage() {
                         className={GHOST}
                         onClick={() => {
                           setMergingId(trade.id);
+                          setMergeTarget(null);
                           setError(null);
                         }}
                       >
@@ -232,6 +314,8 @@ export default function TaxonomyPage() {
 function MergePanel({
   from,
   options,
+  target,
+  onTarget,
   busy,
   error,
   onCancel,
@@ -239,18 +323,22 @@ function MergePanel({
 }: {
   from: Trade;
   options: Trade[];
+  target: number | null;
+  onTarget: (id: number | null) => void;
   busy: boolean;
   error: string | null;
   onCancel: () => void;
   onMerge: (intoId: number, note: string) => void;
 }) {
   const [filter, setFilter] = useState("");
-  const [target, setTarget] = useState<number | null>(null);
   const [note, setNote] = useState("");
+  // A suggestion can pre-select a target before the panel mounts; in that case
+  // don't pop the keyboard onto the search box.
+  const [startedWithTarget] = useState(target !== null);
 
   const matches = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    return options
+    const found = options
       .filter(
         (t) =>
           t.id !== from.id &&
@@ -259,7 +347,13 @@ function MergePanel({
             t.slug.includes(needle)),
       )
       .slice(0, MAX_TARGET_OPTIONS);
-  }, [options, filter, from.id]);
+    // The chosen target must always be an option, or the <select> would show
+    // "Choose a trade…" while a merge is armed for something else.
+    const chosen = options.find((t) => t.id === target);
+    return chosen && !found.some((t) => t.id === chosen.id)
+      ? [chosen, ...found]
+      : found;
+  }, [options, filter, from.id, target]);
 
   const targetName = options.find((t) => t.id === target)?.name;
 
@@ -271,7 +365,7 @@ function MergePanel({
       <input
         id={`filter-${from.id}`}
         type="search"
-        autoFocus
+        autoFocus={!startedWithTarget}
         placeholder="Search active trades"
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
@@ -281,7 +375,7 @@ function MergePanel({
         aria-label="Merge target"
         value={target ?? ""}
         onChange={(event) =>
-          setTarget(event.target.value ? Number(event.target.value) : null)
+          onTarget(event.target.value ? Number(event.target.value) : null)
         }
         className={FIELD}
       >
@@ -307,6 +401,8 @@ function MergePanel({
       <Err>{error}</Err>
       <div className="flex flex-wrap gap-2">
         <ConfirmButton
+          // Re-mounted per target so a change of target disarms the two-tap.
+          key={target ?? "none"}
           label={
             busy
               ? "Merging…"
@@ -314,7 +410,7 @@ function MergePanel({
                 ? `Merge into ${targetName}`
                 : "Choose a target first"
           }
-          disabled={busy || target === null}
+          disabled={busy || targetName === undefined}
           onConfirm={() => {
             if (target !== null) onMerge(target, note);
           }}
@@ -330,4 +426,52 @@ function MergePanel({
       </div>
     </div>
   );
+}
+
+/**
+ * The model's read on a proposal. Loud only when it is confident the trade
+ * already exists (and then offers the one-tap shortcut into the merge picker);
+ * a near-miss is a muted aside; anything else stays out of the way.
+ */
+function SuggestionLine({
+  suggestion,
+  checking,
+  disabled,
+  onUse,
+}: {
+  suggestion: Suggestion | undefined;
+  checking: boolean;
+  disabled: boolean;
+  onUse: (targetId: number) => void;
+}) {
+  if (!suggestion) {
+    return checking ? <p className={HELPER}>Checking…</p> : null;
+  }
+  if (suggestion.kind === "existing") {
+    const { trade } = suggestion;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg bg-zinc-100 px-4 py-3 dark:bg-zinc-900">
+        <p className="text-base">
+          Suggested: merge into {trade.name} ({percent(trade.probability)}%)
+        </p>
+        <button
+          type="button"
+          disabled={disabled}
+          className={SOFT}
+          onClick={() => onUse(trade.id)}
+        >
+          Use as merge target
+        </button>
+      </div>
+    );
+  }
+  if (suggestion.kind === "closest") {
+    const { trade } = suggestion;
+    return (
+      <p className={HELPER}>
+        Probably new — closest is {trade.name} ({percent(trade.probability)}%)
+      </p>
+    );
+  }
+  return null;
 }

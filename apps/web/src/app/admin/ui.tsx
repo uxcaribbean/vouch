@@ -20,6 +20,14 @@ export const GHOST =
   "h-11 rounded-lg border border-zinc-300 px-4 text-base text-black disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-50";
 
 /**
+ * Tertiary action for "use this suggestion" buttons. Sits inside the tinted
+ * zinc-100 suggestion box, so it lifts off it with a white fill and hairline
+ * border rather than a tint of its own.
+ */
+export const SOFT =
+  "h-11 rounded-lg border border-zinc-200 bg-white px-4 text-base font-medium text-black disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50";
+
+/**
  * Destructive actions are outlined red, never filled — a filled red button
  * next to a filled black one invites the wrong tap on a phone.
  */

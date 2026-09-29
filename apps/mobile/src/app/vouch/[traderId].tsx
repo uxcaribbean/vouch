@@ -39,7 +39,13 @@ const ERROR_COPY: Record<string, string> = {
   rate_limited:
     'New accounts can give up to 5 vouches in their first day — try again tomorrow.',
   vouch_locked: "This vouch was removed by the VOUCH team and can't be re-posted.",
+  // M12 comment guard — these two belong to the comment field, not the form.
+  comment_not_positive:
+    'Vouches are for recommending, so the comment needs to be positive. Change or remove it to post your vouch.',
+  comment_promotes_other:
+    "Vouch comments can't advertise anyone else or share their contact details. Change the comment to post your vouch.",
 };
+const COMMENT_ERROR_CODES = new Set(['comment_not_positive', 'comment_promotes_other']);
 const FALLBACK_ERROR = 'Something went wrong sending your vouch. Try again.';
 
 export default function VouchComposerScreen() {
@@ -63,6 +69,9 @@ export default function VouchComposerScreen() {
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Comment-guard refusals show under the comment field; the typed text is
+  // never cleared so the voucher can edit it (or empty it) and resubmit.
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
@@ -119,6 +128,7 @@ export default function VouchComposerScreen() {
         setComment(data?.comment ?? '');
         setConfirmingRemove(false);
         setFormError(null);
+        setCommentError(null);
         setExistingLoaded(true);
       });
     return () => {
@@ -168,6 +178,7 @@ export default function VouchComposerScreen() {
     if (!selectedTradeId || busy) return;
     setBusy(true);
     setFormError(null);
+    setCommentError(null);
     const { data, errorCode } = await invokeFunction<UpsertVouchResponse>('upsert-vouch', {
       trader_id: traderId,
       trade_id: selectedTradeId,
@@ -175,7 +186,8 @@ export default function VouchComposerScreen() {
     });
     setBusy(false);
     if (errorCode) {
-      setFormError(ERROR_COPY[errorCode] ?? FALLBACK_ERROR);
+      if (COMMENT_ERROR_CODES.has(errorCode)) setCommentError(ERROR_COPY[errorCode]);
+      else setFormError(ERROR_COPY[errorCode] ?? FALLBACK_ERROR);
       return;
     }
     if (data) {
@@ -273,7 +285,11 @@ export default function VouchComposerScreen() {
                   label="Say something (optional)"
                   placeholder="What did they do well?"
                   value={comment}
-                  onChangeText={(v) => setComment(v.slice(0, MAX_COMMENT_LENGTH))}
+                  onChangeText={(v) => {
+                    setComment(v.slice(0, MAX_COMMENT_LENGTH));
+                    setCommentError(null);
+                  }}
+                  error={commentError}
                   maxLength={MAX_COMMENT_LENGTH}
                   multiline
                   style={styles.commentInput}

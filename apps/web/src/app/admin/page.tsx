@@ -123,7 +123,10 @@ export default function FlagsPage() {
     // vouches all resolve to names from the same public view.
     const profileIds = [
       ...new Set([
-        ...flags.map((f) => f.reporter_user_id),
+        // System flags (the vouch-comment guard) have no reporter at all.
+        ...flags
+          .map((f) => f.reporter_user_id)
+          .filter((id): id is string => id !== null),
         ...flags
           .map((f) => f.resolved_by)
           .filter((id): id is string => id !== null),
@@ -258,9 +261,7 @@ export default function FlagsPage() {
                   </p>
                 )}
 
-                <p className={HELPER}>
-                  Reported by {queue.names[flag.reporter_user_id] ?? "Unknown"}
-                </p>
+                <ReporterLine flag={flag} names={queue.names} />
 
                 <SubjectPreview preview={queue.previews[flag.id]} />
 
@@ -349,6 +350,33 @@ export default function FlagsPage() {
 
       <AuditStrip refreshToken={auditToken} />
     </div>
+  );
+}
+
+/**
+ * Who raised the report. System flags (source 'system', no reporter) come
+ * from the automatic vouch-comment check, not a member — say so plainly
+ * instead of "Unknown".
+ */
+function ReporterLine({
+  flag,
+  names,
+}: {
+  flag: FlagRow;
+  names: Record<string, string>;
+}) {
+  if (flag.source === "system" || flag.reporter_user_id === null) {
+    return (
+      <p className={`${HELPER} flex flex-wrap items-center gap-2`}>
+        <span>Reported by</span>
+        <Badge>Automatic check</Badge>
+      </p>
+    );
+  }
+  return (
+    <p className={HELPER}>
+      Reported by {names[flag.reporter_user_id] ?? "Unknown"}
+    </p>
   );
 }
 

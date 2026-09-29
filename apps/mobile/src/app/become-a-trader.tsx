@@ -2,7 +2,7 @@ import type { Tables } from '@vouch/shared';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -22,6 +22,13 @@ import {
 type TradeOption = Pick<Tables<'trades'>, 'id' | 'name' | 'slug' | 'category' | 'keywords' | 'status'>;
 type RegionOption = Pick<Tables<'regions'>, 'id' | 'name'>;
 type SelectedTrade = { id: number; name: string; status: string };
+// M12 — response of the `suggest-trade` edge function (live contract:
+// scripts/acceptance/test-m12.mjs). Only `existing` changes what the trader sees.
+type SuggestResponse = {
+  outcome: 'existing' | 'new' | 'unavailable';
+  trade: { id: number; slug: string; name: string; probability: number } | null;
+};
+type Suggestion = { text: string; tradeId: number; tradeName: string };
 
 const MAX_TOTAL_TRADES = 5;
 const MAX_NEW_TRADES = 3;
@@ -52,6 +59,11 @@ export default function BecomeATraderScreen() {
   const [query, setQuery] = useState('');
   const [selectedTrades, setSelectedTrades] = useState<SelectedTrade[]>([]);
   const [newProposedTrades, setNewProposedTrades] = useState<string[]>([]);
+  // Non-null while suggest-trade is checking the typed service (busy state on
+  // the "Add as new" row); the token lets typing drop a late answer.
+  const [checkingToken, setCheckingToken] = useState<number | null>(null);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const suggestTokenRef = useRef(0);
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
   const [selectedRegionIds, setSelectedRegionIds] = useState<number[]>([]);
@@ -150,7 +162,15 @@ export default function BecomeATraderScreen() {
   const showAddNew =
     searchActive && normalizedQuery.length >= 3 && !hasAnyMatch && newProposedTrades.length < MAX_NEW_TRADES;
 
-  function addTrade(trade: TradeOption) {
+  function changeQuery(next: string) {
+    // Typing drops any in-flight suggest-trade check and any open "Did you mean".
+    suggestTokenRef.current += 1;
+    setCheckingToken(null);
+    setSuggestion(null);
+    setQuery(next);
+  }
+
+  function addTrade(trade: Pick<TradeOption, 'id' | 'name' | 'status'>) {
     if (selectedTrades.length + newProposedTrades.length >= MAX_TOTAL_TRADES) return;
     if (selectedTrades.some((t) => t.id === trade.id)) return;
     setSelectedTrades((prev) => [...prev, { id: trade.id, name: trade.name, status: trade.status }]);
@@ -162,8 +182,8 @@ export default function BecomeATraderScreen() {
     setSelectedTrades((prev) => prev.filter((t) => t.id !== id));
   }
 
-  function addProposedTrade() {
-    const trimmed = query.trim();
+  function addProposedTrade(text: string) {
+    const trimmed = text.trim();
     if (trimmed.length < 3) return;
     if (selectedTrades.length + newProposedTrades.length >= MAX_TOTAL_TRADES) return;
     if (newProposedTrades.length >= MAX_NEW_TRADES) return;
@@ -174,6 +194,45 @@ export default function BecomeATraderScreen() {
     setNewProposedTrades((prev) => [...prev, trimmed]);
     setQuery('');
     setStep1Error(null);
+  }
+
+  // M12: before proposing a brand-new service, ask whether it's really an
+  // existing one ("AC & fridge repair" → AC Technician). Only a confident
+  // `existing` interrupts; 'new', 'unavailable' and any error add it as
+  // proposed straight away, exactly as before.
+  async function handleAddNew() {
+    const text = query.trim();
+    if (text.length < 3 || checkingToken != null) return;
+    const token = suggestTokenRef.current + 1;
+    suggestTokenRef.current = token;
+    setCheckingToken(token);
+    let existing: SuggestResponse['trade'] = null;
+    try {
+      const { data, errorCode } = await invokeFunction<SuggestResponse>('suggest-trade', { service: text });
+      if (!errorCode && data?.outcome === 'existing' && data.trade) existing = data.trade;
+    } catch {
+      /* fall through to today's behaviour */
+    }
+    if (suggestTokenRef.current !== token) return; // text edited while waiting
+    setCheckingToken(null);
+    if (existing) {
+      setSuggestion({ text, tradeId: existing.id, tradeName: existing.name });
+      return;
+    }
+    addProposedTrade(text);
+  }
+
+  function pickSuggestedTrade(s: Suggestion) {
+    const trade = trades.find((t) => t.id === s.tradeId);
+    // Same path as picking it from the list — addTrade enforces the 5-service cap.
+    addTrade(trade ?? { id: s.tradeId, name: s.tradeName, status: 'active' });
+    setSuggestion(null);
+    setQuery('');
+  }
+
+  function addSuggestionAsNew(s: Suggestion) {
+    setSuggestion(null);
+    addProposedTrade(s.text);
   }
 
   function removeProposed(name: string) {
@@ -297,7 +356,7 @@ export default function BecomeATraderScreen() {
             <TextField
               placeholder="e.g. plumber, AC repair, gardener"
               value={query}
-              onChangeText={setQuery}
+              onChangeText={changeQuery}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -319,11 +378,24 @@ export default function BecomeATraderScreen() {
                     <ThemedText>{trade.name}</ThemedText>
                   </Pressable>
                 ))}
-                {showAddNew ? (
+                {showAddNew && suggestion && suggestion.text === query.trim() ? (
+                  <ThemedView style={[styles.suggestionCard, { backgroundColor: theme.backgroundSelected }]}>
+                    <ThemedText type="smallBold">Did you mean {suggestion.tradeName}?</ThemedText>
+                    <Button label={`Use ${suggestion.tradeName}`} onPress={() => pickSuggestedTrade(suggestion)} />
+                    <Button
+                      label={`No, add “${suggestion.text}” as new`}
+                      variant="soft"
+                      onPress={() => addSuggestionAsNew(suggestion)}
+                    />
+                  </ThemedView>
+                ) : showAddNew ? (
                   <Pressable
                     accessibilityRole="button"
-                    onPress={addProposedTrade}
+                    accessibilityState={{ busy: checkingToken != null, disabled: checkingToken != null }}
+                    disabled={checkingToken != null}
+                    onPress={handleAddNew}
                     style={[styles.resultRow, styles.addNewRow, { borderColor: theme.text }]}>
+                    {checkingToken != null ? <ActivityIndicator /> : null}
                     <ThemedText>Add &quot;{query.trim()}&quot; as a new service</ThemedText>
                   </Pressable>
                 ) : null}
@@ -546,6 +618,15 @@ const styles = StyleSheet.create({
   addNewRow: {
     borderWidth: 1,
     borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: Spacing.two,
+  },
+  suggestionCard: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.three,
   },
   chipSection: {
     gap: Spacing.two,

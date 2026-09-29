@@ -20,6 +20,17 @@ const RESEND_SECONDS = 30;
 
 type Step = "phone" | "otp" | "name" | "compose" | "done";
 
+/** upsert-vouch error codes → what the visitor reads. */
+const VOUCH_ERRORS: Record<string, string> = {
+  vouch_locked: "This vouch was removed by the VOUCH team and can't be re-posted.",
+  rate_limited: "New accounts can give up to 5 vouches in their first day.",
+  comment_not_positive:
+    "Vouches are for recommending, so the comment needs to be positive. Change or remove it to post your vouch.",
+  comment_promotes_other:
+    "Vouch comments can't advertise anyone else or share their contact details. Change the comment to post your vouch.",
+  default: "That didn't go through. Try again in a moment.",
+};
+
 const FIELD =
   "h-14 w-full rounded-lg border border-zinc-300 bg-white px-4 text-lg text-black outline-none placeholder:text-zinc-400 focus:border-black dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-400";
 const BUTTON =
@@ -190,13 +201,9 @@ export function VouchFlow({
     setBusy(false);
 
     if (errorCode) {
-      setError(
-        errorCode === "vouch_locked"
-          ? "This vouch was removed by the VOUCH team and can't be re-posted."
-          : errorCode === "rate_limited"
-            ? "New accounts can give up to 5 vouches in their first day."
-            : "That didn't go through. Try again in a moment.",
-      );
+      // `comment` is deliberately left alone on every error path: the visitor
+      // edits what they wrote rather than retyping it.
+      setError(VOUCH_ERRORS[errorCode] ?? VOUCH_ERRORS.default);
       return;
     }
 

@@ -6,7 +6,7 @@ hardcode the brand in logic.**
 
 - Authoritative spec: [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC.md). Build modules in its stated order; don't build V2 items.
 - Full project state, decisions log, and per-module handover notes: [docs/HANDOVER.md](docs/HANDOVER.md) — **read this first when picking up work.**
-- Status: **M0–M9 + M11 shipped; M10 lifecycle shipped** (one commit per module, pushed to GitHub). Remaining code: only the provider checkout + webhook (blocked on founder decisions — spec §7: provider, TTD price, domain). run-billing-lifecycle + run-nudges need a daily scheduler + real CRON_SECRET when hosted. Admin promotion: `update users set role='admin' where id=...` via service role; /admin lives in apps/web.
+- Status: **M0–M9 + M11 + M12 shipped; M10 lifecycle shipped** (one commit per module, pushed to GitHub). Remaining code: only the provider checkout + webhook (blocked on founder decisions — spec §7: provider, TTD price, domain). run-billing-lifecycle + run-nudges need a daily scheduler + real CRON_SECRET when hosted. Admin promotion: `update users set role='admin' where id=...` via service role; /admin lives in apps/web.
 
 ## Iron rules
 
@@ -50,6 +50,10 @@ SMS is impossible locally (dummy Twilio creds — deliberate, see HANDOVER).
 - `docker exec` needs `-i` for stdin/heredocs.
 - SDK 57's `expo-contacts` main entry ships THROWING STUBS (new class API);
   the working functional API is at `expo-contacts/legacy` — import that.
+- M12 (TypeSafe/Jev): questions + thresholds live ONLY in
+  `packages/shared/src/understanding.ts`; edge functions call
+  `_shared/typesafe.ts` (fail-open, never logs text). Key in
+  supabase/functions/.env locally — never print it.
 - In-app-browser automation: synthetic clicks on RN-web Pressables can
   silently no-op. Verify with a DOM `element.click()` via javascript_exec
   before suspecting the app.

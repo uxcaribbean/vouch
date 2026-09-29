@@ -1,6 +1,6 @@
 # VOUCH — Handover / project state
 
-_Last updated: 2026-08-30. Everything a new person (or a new AI session on a
+_Last updated: 2026-09-29. Everything a new person (or a new AI session on a
 different account) needs to continue this build with only this folder._
 
 The authoritative requirements are [VOUCH-BUILD-SPEC.md](VOUCH-BUILD-SPEC.md).
@@ -24,6 +24,7 @@ the way, and where the landmines are. Repo conventions live in
 | M9 Trust/safety/admin | ✅ | `M9` | `test-m9.mjs` (30 checks) + reviewer browser run |
 | M11 Analytics | ✅ | `M11` | `test-m11.mjs` (10 checks, recomputes from raw events) |
 | M10 Billing | ◐ lifecycle ✅ | `M10` | `test-m10.mjs` (26 checks); provider integration pending founders |
+| M12 Plain-language understanding | ✅ | `M12` | `test-m12.mjs` (36 checks, live + fallback tiers) + 29 unit tests |
 
 One git commit per module. `pnpm verify:acceptance` reruns every suite from a
 clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
@@ -276,6 +277,46 @@ inline (idempotent under webhook retries — the unique key makes replays
 safe; the acceptance suite already drives the full state machine the
 webhook merely feeds). Wire a daily scheduler for run-billing-lifecycle
 AND run-nudges on the hosted project + set real CRON_SECRET.
+**M12 Plain-language understanding — shipped 2026-09-29** (not in the
+original spec; James approved it after a live evaluation — the M2.2
+"suggest the closest trade" item is the one part the spec named). Uses
+TypeSafe's Jev model (https://docs.typesafe.ai) for three narrow jobs:
+search by need (interpret-need: "water leaking through the ceiling when
+rain fall" → Roofer), the vouch-comment guard inside upsert-vouch (refuses
+complaints and advertising posted as vouches; borderline → publishes and
+files a `source: 'system'` flag), and new-service matching (suggest-trade:
+"AC & fridge repair" → "Did you mean AC Technician?", and merge
+suggestions on /admin/taxonomy).
+- The questions, thresholds and fallback policy are ONE reviewer-owned
+  file: packages/shared/src/understanding.ts (+ unit tests). Edge
+  functions only call `_shared/typesafe.ts` → `askJev`, which never throws,
+  never logs what it sent, and returns null on any failure. Null =
+  fail-open: search falls back to keyword typeahead, vouches publish with
+  `vouch_checks.check = 'unchecked'`.
+- Model pinned to `jev-1.13.0` (JEV_MODEL). Moving versions = re-run
+  test-m12 live tier first; thresholds were tuned on that version.
+- Moderation scores live in `vouch_checks` (admin-read only), never on the
+  public vouches row. Raw search text and refused comments are never
+  stored — events carry outcomes only (the suite greps for this).
+- Keys: local = supabase/functions/.env (gitignored; the CLI auto-loads it
+  for `functions serve`; template in .env.example). Hosted = Supabase Edge
+  Function secret TYPESAFE_API_KEY (worksheet steps a8/o5 — James's own
+  key; the one in ~/.claude/settings.json is a test key).
+- test-m12 runs its model checks only when a key is present; without one
+  it verifies every fallback. Both tiers were run green before shipping.
+- Cost: input tokens only, ~$0.00008 per call. Measured latency: exact
+  search ~50ms, model search ~0.25–1.4s (cold), comment guard ~0.25–0.8s.
+- Near-miss to watch: "Vouched from the web link — took a minute." scored
+  complaint 0.30 (review line 0.5). If real users get false refusals,
+  loosen COMMENT_BLOCK/COMMENT_REVIEW in understanding.ts, not the prompts
+  alone, and re-run the live tier.
+- Privacy: search wording and vouch comments go to TypeSafe (US); never
+  phone numbers, hashes or contacts. The privacy page must say so
+  (worksheet l2/l3). Zero-retention needs their enterprise plan.
+- Local ops: after `supabase db reset`, Kong can hold a stale route to the
+  restarted auth container (502 at the first login). `docker restart
+  supabase_kong_vouch` fixes it.
+
 Plus the standing device-pass list: real OTP, contacts read, wa.me loop,
 EAS projectId + real push triggers.
 

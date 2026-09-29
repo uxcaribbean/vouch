@@ -506,3 +506,17 @@ enabled = true
 # returned — see the function's own doc comment.
 verify_jwt = false
 entrypoint = "./functions/resolve-invite/index.ts"
+
+[functions.interpret-need]
+enabled = true
+# PUBLIC-ish: verify_jwt stays on, but the anon key is a valid JWT, so a
+# logged-out visitor can search by need (M12). No user is required.
+verify_jwt = true
+entrypoint = "./functions/interpret-need/index.ts"
+
+[functions.suggest-trade]
+enabled = true
+# Signed-in members only: the JWT check plus a real-user check inside the
+# function (the anon key alone is refused with 401).
+verify_jwt = true
+entrypoint = "./functions/suggest-trade/index.ts"

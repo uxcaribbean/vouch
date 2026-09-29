@@ -9,3 +9,4 @@ export type {
   TablesInsert,
   TablesUpdate,
 } from "./database.types.ts";
+export * from "./understanding.ts";
