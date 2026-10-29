@@ -6,9 +6,22 @@ own phone contacts: **"Recommended by someone you know."**
 The authoritative build spec is [docs/VOUCH-BUILD-SPEC.md](docs/VOUCH-BUILD-SPEC.md).
 `VOUCH` is a codename — never hardcode the brand name in logic.
 
-**Picking this project up fresh?** Read [docs/HANDOVER.md](docs/HANDOVER.md)
-— full project state, decisions log, per-module notes, and first-run steps
-for a new machine account. AI-session context lives in [CLAUDE.md](CLAUDE.md).
+## Where to start
+
+- **The concept:** spec [§1](docs/VOUCH-BUILD-SPEC.md#1-product-overview)
+  — the one-liner, the core mechanic, and the product decisions that are
+  locked (positive-only vouches, contacts never leave the phone, invites
+  are always a person pressing send). Then §5 (what's deliberately left
+  for V2) and §7 (what the founders still have to decide). One addition
+  since the spec: M12 uses a small AI model for search-by-need and for
+  checking vouch comments — see [HANDOVER §5](docs/HANDOVER.md).
+- **Where the build stands:** the status table below, then
+  [docs/HANDOVER.md](docs/HANDOVER.md) §1 (proof per module), §5
+  (per-module notes and what's left) and §6 (what isn't set up yet: no
+  hosted backend, no store builds, no payments).
+- **Changing code:** [CLAUDE.md](CLAUDE.md) (iron rules + gotchas), then
+  the fresh-clone setup below. HANDOVER §2 covers moving to a new machine
+  account.
 
 ## Status
 

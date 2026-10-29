@@ -1,6 +1,6 @@
 # VOUCH — Handover / project state
 
-_Last updated: 2026-09-29. Everything a new person (or a new AI session on a
+_Last updated: 2026-10-28. Everything a new person (or a new AI session on a
 different account) needs to continue this build with only this folder._
 
 The authoritative requirements are [VOUCH-BUILD-SPEC.md](VOUCH-BUILD-SPEC.md).
@@ -71,27 +71,51 @@ complete transferable state, by design.
 ## 3. What exists, and where
 
 - `packages/shared` — **the product's spine**: `phone.ts` (normalize +
-  sha256 hash; the identity/matching contract), `referral.ts`,
-  `schemas.ts`/`taxonomy.ts` (zod API contracts), generated
-  `database.types.ts` (regen with `pnpm db:types` after any migration).
-- `supabase/migrations/` — 4 migrations: taxonomy seeds (14 Trinidad regions,
-  72 trades with search keywords), auth/users (+ `events` and
-  `contact_hashes` pulled forward deliberately — see §4), trader profiles,
-  directory search (`search_traders` RPC + `trader_directory` view).
-- `supabase/functions/` — `complete-profile`, `delete-account`,
-  `upsert-trader-profile`, `health`. Shared helpers in `_shared/`; each
-  function has its own `deno.json` for npm imports and an explicit
-  `entrypoint` in `config.toml`.
-- `apps/mobile` — Expo SDK 57. Auth flow (sign-in → OTP → profile setup),
-  settings (incl. account deletion), become-a-trader wizard, my/public
-  trader profiles, directory home + search, Account tab. Design system is a
+  sha256 hash; the identity/matching contract), `referral.ts`, `invites.ts`
+  (every outbound message template), `understanding.ts` (M12's questions
+  and thresholds), `schemas.ts`/`taxonomy.ts` (zod API contracts),
+  generated `database.types.ts` (regen with `pnpm db:types` after any
+  migration).
+- `supabase/migrations/` — 12 migrations, in module order: taxonomy seeds
+  (14 Trinidad regions, 72 trades with search keywords), auth/users (+
+  `events` and `contact_hashes` pulled forward deliberately — see §4),
+  trader profiles, directory search (`search_traders` RPC +
+  `trader_directory` view), vouches, contact matching, invites/referrals,
+  notifications, trust/safety/admin, north-star metrics, billing
+  lifecycle, plain-language understanding.
+- `supabase/functions/` — 16 edge functions. Each has its own `deno.json`
+  for npm imports and an explicit `entrypoint` in `config.toml`; shared
+  helpers live in `_shared/` (`notify.ts` is the only push path,
+  `typesafe.ts` the only model call). By job:
+  - identity: `complete-profile` (also credits referrals at signup),
+    `delete-account`
+  - listings and vouches: `upsert-trader-profile`, `upsert-vouch` (the
+    anti-gaming gate + comment guard), `remove-vouch`
+  - the graph and the growth loop: `sync-contacts` (hash-only privacy
+    boundary), `create-invite`, `resolve-invite` (public; powers
+    `/v/[token]`)
+  - understanding (M12): `interpret-need`, `suggest-trade`
+  - trust and admin: `submit-flag`, `admin-action` (the single audited
+    chokepoint for every admin change), `admin-lookup` (read-only)
+  - scheduled jobs, cron-secret guarded: `run-nudges`,
+    `run-billing-lifecycle` (need a daily scheduler once hosted)
+  - `health`
+- `apps/mobile` — Expo SDK 57, expo-router. Home (browse by category) +
+  search, public trader profile, become-a-trader wizard and my listing,
+  vouch composer, ask-for-vouches (contact picker → WhatsApp drafts),
+  contact sync, sign-in → OTP → profile setup, You tab, settings
+  (notification toggles, contact-sync controls, invite a friend, account
+  deletion), report a problem, blocked numbers. Design system is a
   deliberate monochrome placeholder (`components/ui/*`), 56px touch targets.
-- `apps/web` — Next 16 placeholder only. Comes alive at M7 (`/v/[token]`)
-  and M9 (`/admin`).
-- `scripts/acceptance/` — the per-module server-side acceptance suites,
-  fixtures, perf seed/cleanup SQL, and `run-all.sh`.
-- `.github/workflows/ci.yml` — typecheck + tests; activates the moment this
-  repo is pushed to GitHub (not yet created — deliberate, see §6).
+- `apps/web` — Next 16: `/v/[token]` (no-install vouch flow), `/join`
+  (referral landing), `/admin` (flags queue, `/lookup`, `/taxonomy`,
+  `/rings`, `/metrics`). The root `/` is still a placeholder splash; there
+  is no marketing site.
+- `scripts/acceptance/` — one suite per module (`test-m1` … `test-m12`),
+  fixtures, perf seed/cleanup SQL for M3/M4, and `run-all.sh` (what
+  `pnpm verify:acceptance` runs).
+- `.github/workflows/ci.yml` — typecheck + tests on every push to GitHub.
+  CI does not run lint (see small known debts in §5).
 
 Current demo data after `verify:acceptance`: Keisha Mohammed
 (island-wide plumber, +18685550001) and James Testman (Arima plumber,
@@ -257,6 +281,13 @@ Ops notes: parallel executors share the one local DB and acceptance runs
 RESET it — serialize resets; port 3000 may be held by unrelated projects
 (use the `web-3100` launch entry).
 
+**Search empty state — 2026-07-27** (`3b6ebe6`). The M3.6 "no results"
+state carried a disabled "arrives with M6" placeholder; it is now the live
+M6 join-invite share ("Invite a trader", via `InviteAFriend`'s new `label`
+prop). Logged out it routes to sign-in, signed in without a profile to
+profile setup — it never calls create-invite without a session, so search
+stays fully usable logged out.
+
 **M10 lifecycle — shipped 2026-08-30** (Sonnet 5 executor). The
 provider-independent state machine: run-billing-lifecycle (cron-guarded
 like run-nudges) lapses expired free periods, warns at T-30/7/1 (new
@@ -321,9 +352,15 @@ Plus the standing device-pass list: real OTP, contacts read, wa.me loop,
 EAS projectId + real push triggers.
 
 **Small known debts:** avatar upload UI deferred from M1 (bucket + policies
-ready; photo upload exists in the trader wizard — reuse that pattern);
-one pre-existing lint error in `apps/mobile/src/hooks/use-color-scheme.web.ts`
-(Expo template file, `react-hooks/set-state-in-effect`).
+ready; photo upload exists in the trader wizard — reuse that pattern).
+`expo lint` reports 5 errors + 1 warning (CI doesn't run lint, so nothing
+blocks): in `apps/mobile/src/app/vouch/[traderId].tsx`, three
+`react-hooks/purity` errors for `Math.random` in the success confetti
+(inside a once-only `useMemo`, so harmless in practice), one synchronous
+setState in the existing-vouch effect, and an unused `theme`; plus one
+`react-hooks/set-state-in-effect` in the Expo template file
+`apps/mobile/src/hooks/use-color-scheme.web.ts`. The web root page `/`
+still says the vouch flow is coming "soon" — stale copy, no logic.
 
 ## 6. Not set up yet (deliberately)
 
@@ -337,3 +374,6 @@ one pre-existing lint error in `apps/mobile/src/hooks/use-color-scheme.web.ts`
 - **No EAS/Expo account wiring** — `eas.json` profiles exist.
 - **Founder items open** (spec §7): final name + domain (blocks M6 links),
   TTD price + payment provider (M10), seed-trader strategy, legal review.
+  None decided as of 2026-10-28. James's step-by-step launch checklist is
+  mirrored, step by step, in `.claude/build-ledger.yaml` (local, not
+  committed).
