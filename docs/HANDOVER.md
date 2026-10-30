@@ -1,34 +1,17 @@
-# VOUCH — Handover / project state
+# VOUCH — Handover: decisions log and per-module notes
 
-_Last updated: 2026-10-28. Everything a new person (or a new AI session on a
-different account) needs to continue this build with only this folder._
-
-The authoritative requirements are [VOUCH-BUILD-SPEC.md](VOUCH-BUILD-SPEC.md).
-This document records what's been built against it, the decisions taken along
-the way, and where the landmines are. Repo conventions live in
-[/CLAUDE.md](../CLAUDE.md); setup steps in [/README.md](../README.md).
+_Last updated: 2026-10-30. The durable "why" behind the build and the
+landmines in each module. **Current state, blockers and next steps live in
+[/HANDOFF.md](../HANDOFF.md)**; repo conventions in [/AGENTS.md](../AGENTS.md);
+setup steps in [/README.md](../README.md). The authoritative requirements are
+[VOUCH-BUILD-SPEC.md](VOUCH-BUILD-SPEC.md)._
 
 ## 1. Status at a glance
 
-| Module | State | Commit | Proof |
-|---|---|---|---|
-| M0 Foundations | ✅ | `M0+M1` | 31 unit tests (`pnpm test`) |
-| M1 Auth & identity | ✅ | `M0+M1` | `scripts/acceptance/test-m1.mjs` (21 checks) |
-| M2 Trader profiles | ✅ | `M2` | `test-m2.mjs` (24 checks) |
-| M3 Directory search | ✅ | `M3` | `test-m3.mjs` (11 checks) + perf P95 18.6ms @ 10k traders |
-| M5 Vouches | ✅ | `M5` | `test-m5.mjs` (24 checks) + perf P95 25.8ms with live counts |
-| M4 Contact sync | ✅ | `M4` | `test-m4.mjs` (26 checks) + perf P95 238.5ms @ 1M hashes |
-| M6 Invites & referrals | ✅ | `M6` | `test-m6.mjs` (24 checks) |
-| M7 Web vouch flow | ✅ | `M7` | `test-m7.mjs` (15 checks) + reviewer-driven browser run |
-| M8 Notifications | ✅ | `M8` | `test-m8.mjs` (18 checks) |
-| M9 Trust/safety/admin | ✅ | `M9` | `test-m9.mjs` (30 checks) + reviewer browser run |
-| M11 Analytics | ✅ | `M11` | `test-m11.mjs` (10 checks, recomputes from raw events) |
-| M10 Billing | ◐ lifecycle ✅ | `M10` | `test-m10.mjs` (26 checks); provider integration pending founders |
-| M12 Plain-language understanding | ✅ | `M12` | `test-m12.mjs` (36 checks, live + fallback tiers) + 29 unit tests |
-
-One git commit per module. `pnpm verify:acceptance` reruns every suite from a
-clean DB — if that passes and `pnpm test && pnpm typecheck` pass, the world is
-as this document describes.
+Moved to [/HANDOFF.md](../HANDOFF.md) on 2026-10-30 so the status table lives
+in exactly one place. The rule stands: one git commit per module, and if
+`pnpm verify:acceptance` (every suite from a clean DB) plus
+`pnpm test && pnpm typecheck` pass, the world is as these documents describe.
 
 ## 2. First run for the new account (same computer)
 
@@ -38,8 +21,11 @@ Which scenario applies?
 nothing environmental changes. The Colima VM, local database, `.env` files,
 and local AI-session state under `~/.claude` are all keyed to the macOS
 user, not the AI account. Open this folder, start the stack if it isn't
-running (`colima start`, `pnpm db:start`, `pnpm functions:serve`), continue
-from §5. Skip the rest of this section.
+running (Docker Desktop, `pnpm db:start`, `pnpm functions:serve`), continue
+from [/HANDOFF.md](../HANDOFF.md). Skip the rest of this section. One thing
+that does not carry over: James's plain-language worksheet
+(https://claude.ai/artifact/V4TwbnMyvMqdUdz7ipUVvf) is private to his Claude
+account, so a different account cannot read his ticks or notes — ask him.
 
 **B. Different macOS account on this Mac** — two extra facts:
 
@@ -54,7 +40,7 @@ from §5. Skip the rest of this section.
    (migrations + seeds rebuild it; all data is disposable dev data).
 
 ```sh
-colima start --cpu 4 --memory 8      # downloads a VM image on first run
+open -a Docker                       # or: colima start --cpu 4 --memory 8
 cd "/Users/james/Local Code/vouch"
 pnpm install
 pnpm db:start                        # ~2GB image download on first run
@@ -65,8 +51,8 @@ pnpm --filter @vouch/mobile start    # Expo; test numbers +18685550001..5, OTP 1
 ```
 
 Also note: any prior AI-session memory (task lists, `~/.claude` state) does
-NOT transfer between accounts. This file + CLAUDE.md + the spec are the
-complete transferable state, by design.
+NOT transfer between accounts. HANDOFF.md + AGENTS.md + this file + the spec
+are the complete transferable state, by design.
 
 ## 3. What exists, and where
 
@@ -364,16 +350,7 @@ still says the vouch flow is coming "soon" — stale copy, no logic.
 
 ## 6. Not set up yet (deliberately)
 
-- **No hosted Supabase project** — local only. Going hosted needs: project
-  creation, Twilio Verify credentials, applying migrations, deploying edge
-  functions, real env files (never commit secrets; only the public local
-  demo keys are in-repo).
-- **GitHub remote live (2026-07-25):** https://github.com/uxcaribbean/vouch —
-  CI (typecheck + tests) runs on every push. Process: commit AND push after
-  every module.
-- **No EAS/Expo account wiring** — `eas.json` profiles exist.
-- **Founder items open** (spec §7): final name + domain (blocks M6 links),
-  TTD price + payment provider (M10), seed-trader strategy, legal review.
-  None decided as of 2026-10-28. James's step-by-step launch checklist is
-  mirrored, step by step, in `.claude/build-ledger.yaml` (local, not
-  committed).
+Moved to [/HANDOFF.md](../HANDOFF.md), section "What's left, and what it's
+waiting on", on 2026-10-30. That list is the single source for hosting, EAS,
+payments and the open founder items; James's step-by-step worksheet is
+mirrored in `.claude/build-ledger.yaml` (local, not committed).
